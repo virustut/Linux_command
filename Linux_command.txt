@@ -1,0 +1,23 @@
+cp -r dir1 dir2 :- that means in what data in dir1 that is copy to in a dir2
+
+# delete or remove a file 
+rm -rf directory name/ filename # remove forcefully here r recursive
+
+
+# move a file  or rename file 
+mv lt.txt rt.txt
+
+# file permission
+# three types => read =4 , write =2, execute =1
+chmode 7    7     7    abc.txt
+       user group other 
+
+chmode u+rw   # and id revoke then put - symbol
+       g+rwx
+       o+rwx
+
+
+
+# give permission at folder level
+chmode -R 775 directory_name # this will give full permission in all and -R se sare folder me ho jayega
+
