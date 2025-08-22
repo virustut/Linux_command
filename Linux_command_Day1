@@ -1,0 +1,138 @@
+# create a user in linux
+sudo useradd dba1 --->this command will run with the root user or super user
+
+# see user
+cat /etc/passwd or search cat /etc/passwd | grep dba1
+
+# command difference
+if we use mkdir folder # with a named user who have full rights the folder will create
+but 
+if use sudo mkdir folder1 # with same user but just su then the folder will create as root user   
+
+# Note : to increase the command screen size press CTRL+SHIFT+plus button
+
+# to start the terminal using command 
+press ALT + F2 and type gnome-terminal -> then it will open 
+
+# two types of console
+1. physical console ctlr+alt+f3 it is open the new wizard command open up to 6 terminal and press ctrl+alt+f1 rollback and f2 willl
+open the graphical user gui
+
+2. virtual console 
+[root@localhost ~]# tty
+/dev/pts/1
+
+
+🔹 What is tty?
+
+tty = teletypewriter → the terminal device you’re currently using.
+
+In Linux, every terminal (physical console, SSH session, or pseudo-terminal like in GNOME Terminal) is represented by a device file under /dev/.
+# run tty this will know in which mode we have work
+for virtual console show pts
+
+/dev/tty1        # physical console (Ctrl+Alt+F1)
+/dev/pts/0       # first SSH or GUI terminal session
+/dev/pts/2       # another SSH session
+
+
+🔹 Switch between TTYs in Red Hat
+
+On a physical machine:
+
+Ctrl + Alt + F1 → TTY1
+
+Ctrl + Alt + F2 → TTY2
+
+…
+
+Ctrl + Alt + F6 → TTY6
+
+Ctrl + Alt + F7 → usually graphical interface (GNOME desktop).
+
+On a VM or remote SSH, you only see pseudo-terminals (/dev/pts/X).
+
+
+
+# to jump root user type 
+su -
+# to logout root user type
+logout
+# to go specific user type
+su - username
+
+# to see which user where work type 
+w
+
+# what is BASH  --> GNU Bourne Again Shell or it is  a shell
+The bash is a program that interprets command typed in by the user, called command line interpreter
+
+the default shell of linux os -/bin/bash
+
+bash is the improved version of sh(Bourne Shell)
+Regular user start the shell prompt , end with $sign
+For the root user (super user) , shell prompt end with #sign
+
+# to find where program execute type
+which ls => try to find where is it 
+
+# command to find in which os we work
+cat /etc/redhat-release
+uname -a 
+
+# the BASH is similar to cmd.exe in windows 
+
+useradd -u 2001 user02
+
+optons : are use to change the behaviour of command
+here -u is a option and user02 is an argument 
+
+
+command , option , argument
+
+
+# Working with basic Linux commands
+
+How to logout from the linux system ?
+CTRL+D to logout the session from any user
+
+Use the logout command 
+Use the exit command
+
+#logout
+#exit
+
+How to start a terminal in Linux ?
+press ALT + F2 and type gnome-terminal -> then it will open 
+
+# To find the in which directory we work type 
+pwd -> preset working directory
+
+# To create a directory 
+mkdir newfoder
+
+# reboot the linux machine 
+reboot or init6
+
+# shut down the linux machine
+init 0 or poweroff
+
+# other basic linux command
+
+who
+whoami
+w
+;seprator
+| multiple command
+* all
+date
+passwd
+file
+cat
+
+
+
+
+
+
+
