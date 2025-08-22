@@ -138,6 +138,17 @@ reboot or init6
 # shut down the linux machine
 init 0 or poweroff
 
+ctrl+alt+f1(login screen)
+ctlr+alt+f2(graphical)
+ctlr+alt+f3-f6(CUI/CLI)
+chvt1(2-6)
+ctrl+shft+t(new tab)
+ctlr+shift+++
+ctlr+--
+echo $SHELL
+echo $BASH
+uname -a ==> check shell version 
+
 # other basic linux command
 
 who
@@ -150,6 +161,17 @@ date
 passwd
 file
 cat
+less
+more 
+head
+tail
+wc 
+tab use
+backslace
+character(\)
+history(!)
+
+
 
 
 
