@@ -1,3 +1,24 @@
+🔹 What is Swap in Linux?
+Swap is disk space used as virtual memory when the system’s physical RAM is full.
+It’s like an “overflow” area where inactive memory pages can be moved to free up RAM.
+
+Swap can be a partition or a file (/swapfile).
+🔹 Why do we use Swap?
+
+Handle Memory Shortage
+If your system runs out of physical RAM, swap prevents applications from crashing by temporarily moving less-used memory pages to disk.
+
+System Stability
+Without swap, if RAM fills up completely, Linux may start killing processes (OOM killer).
+With swap, the system slows down but remains stable.
+
+Hibernate (Suspend-to-Disk)
+When you hibernate a laptop, the full RAM contents are written to swap.
+On resume, it’s restored back into memory.
+For this, swap must be at least as large as RAM.
+Buffer for Spikes
+In production servers, workloads often spike. Swap helps absorb sudden short bursts of memory usage.
+
 # create a user in linux
 sudo useradd dba1 --->this command will run with the root user or super user
 
