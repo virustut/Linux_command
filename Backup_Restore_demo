@@ -1,0 +1,1056 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Server Backup & Restore - Internal Process</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+        }
+        
+        .presentation-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .slide {
+            width: 90%;
+            max-width: 1200px;
+            height: 85vh;
+            background: rgba(0, 0, 0, 0.8);
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            backdrop-filter: blur(15px);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            display: none;
+            position: relative;
+            overflow-y: auto;
+        }
+        
+        .slide.active {
+            display: block;
+            animation: slideIn 0.5s ease-out;
+        }
+        
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(50px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        
+        h1 {
+            font-size: 2.5rem;
+            text-align: center;
+            margin-bottom: 30px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        h2 {
+            font-size: 2rem;
+            margin-bottom: 25px;
+            color: #4CAF50;
+            text-align: center;
+        }
+        
+        h3 {
+            font-size: 1.5rem;
+            margin: 20px 0 15px 0;
+            color: #FFD700;
+        }
+        
+        .process-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin: 20px 0;
+        }
+        
+        .process-card {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 20px;
+            border-radius: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            transition: all 0.3s ease;
+        }
+        
+        .process-card:hover {
+            background: rgba(255, 255, 255, 0.15);
+            transform: translateY(-5px);
+        }
+        
+        .process-icon {
+            font-size: 2rem;
+            margin-bottom: 10px;
+            display: block;
+        }
+        
+        .process-title {
+            font-size: 1.2rem;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #4CAF50;
+        }
+        
+        .process-desc {
+            font-size: 0.9rem;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        
+        .backup-animation {
+            height: 300px;
+            position: relative;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 15px;
+            margin: 20px 0;
+            overflow: hidden;
+            border: 2px solid rgba(76, 175, 80, 0.3);
+        }
+        
+        .db-component {
+            position: absolute;
+            border-radius: 10px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+            text-align: center;
+            transition: all 0.5s ease;
+            font-size: 12px;
+        }
+        
+        .database {
+            background: linear-gradient(135deg, #2196F3, #1976D2);
+            width: 120px;
+            height: 80px;
+            top: 20px;
+            left: 50px;
+        }
+        
+        .backup-agent {
+            background: linear-gradient(135deg, #FF9800, #F57C00);
+            width: 100px;
+            height: 60px;
+            top: 120px;
+            left: 200px;
+        }
+        
+        .backup-file {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            width: 120px;
+            height: 80px;
+            top: 20px;
+            right: 50px;
+        }
+        
+        .data-flow {
+            position: absolute;
+            width: 4px;
+            background: linear-gradient(to bottom, #4CAF50, transparent);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+        
+        .flow1 {
+            top: 60px;
+            left: 170px;
+            height: 80px;
+            transform: rotate(45deg);
+        }
+        
+        .flow2 {
+            top: 60px;
+            right: 170px;
+            height: 80px;
+            transform: rotate(-45deg);
+        }
+        
+        .data-flow.active {
+            opacity: 1;
+            box-shadow: 0 0 10px #4CAF50;
+        }
+        
+        .navigation {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+        }
+        
+        .nav-btn {
+            padding: 12px 20px;
+            border: none;
+            border-radius: 25px;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .nav-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .nav-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .slide-counter {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+        
+        .key-point {
+            background: rgba(255, 215, 0, 0.1);
+            border-left: 4px solid #FFD700;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 5px;
+        }
+        
+        .backup-types {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .backup-type {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 20px;
+            border-radius: 12px;
+            border: 2px solid;
+            text-align: center;
+            transition: all 0.3s ease;
+        }
+        
+        .full-backup {
+            border-color: #4CAF50;
+        }
+        
+        .diff-backup {
+            border-color: #FF9800;
+        }
+        
+        .log-backup {
+            border-color: #2196F3;
+        }
+        
+        .backup-type:hover {
+            background: rgba(255, 255, 255, 0.1);
+            transform: scale(1.05);
+        }
+        
+        .step-list {
+            list-style: none;
+            padding: 0;
+        }
+        
+        .step-list li {
+            background: rgba(255, 255, 255, 0.08);
+            margin: 10px 0;
+            padding: 15px 20px;
+            border-radius: 10px;
+            border-left: 4px solid #4CAF50;
+            transition: all 0.3s ease;
+        }
+        
+        .step-list li:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateX(10px);
+        }
+        
+        .step-number {
+            color: #4CAF50;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+        
+        .comparison-table th,
+        .comparison-table td {
+            padding: 12px 15px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .comparison-table th {
+            background: rgba(76, 175, 80, 0.3);
+            color: white;
+            font-weight: bold;
+        }
+        
+        .comparison-table td {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        
+        .demo-section {
+            background: rgba(0, 0, 0, 0.4);
+            padding: 25px;
+            border-radius: 15px;
+            margin: 20px 0;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .sql-command {
+            background: rgba(0, 0, 0, 0.6);
+            color: #00ff88;
+            padding: 15px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            margin: 10px 0;
+            border-left: 4px solid #00ff88;
+        }
+        
+        .title-slide {
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+        
+        .title-slide h1 {
+            font-size: 3rem;
+            margin-bottom: 20px;
+        }
+        
+        .title-slide p {
+            font-size: 1.2rem;
+            opacity: 0.8;
+            margin-bottom: 40px;
+        }
+        
+        .feature-highlight {
+            background: rgba(76, 175, 80, 0.2);
+            color: #4CAF50;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="presentation-container">
+        <!-- Slide Counter -->
+        <div class="slide-counter">
+            <span id="slideNumber">1</span> / <span id="totalSlides">8</span>
+        </div>
+        
+        <!-- Slide 1: Title -->
+        <div class="slide active title-slide" id="slide1">
+            <h1>🗄️ SQL Server Backup & Restore</h1>
+            <p>Understanding Internal Database Operations</p>
+            <div style="margin-top: 30px;">
+                <div class="feature-highlight">💡 Interactive Learning Experience</div>
+            </div>
+            <div style="margin-top: 40px; font-size: 14px; opacity: 0.7;">
+                Navigate with ← → arrow keys or use buttons below
+            </div>
+        </div>
+        
+        <!-- Slide 2: Overview -->
+        <div class="slide" id="slide2">
+            <h2>🎯 What We'll Learn</h2>
+            <div class="process-grid">
+                <div class="process-card">
+                    <span class="process-icon">📦</span>
+                    <div class="process-title">Backup Process</div>
+                    <div class="process-desc">How SQL Server reads and copies database files to create backup files</div>
+                </div>
+                <div class="process-card">
+                    <span class="process-icon">🔄</span>
+                    <div class="process-title">Restore Process</div>
+                    <div class="process-desc">How backup files are used to recreate the original database</div>
+                </div>
+                <div class="process-card">
+                    <span class="process-icon">📝</span>
+                    <div class="process-title">Transaction Log Role</div>
+                    <div class="process-desc">How transaction logs ensure data consistency during backup/restore</div>
+                </div>
+                <div class="process-card">
+                    <span class="process-icon">⚡</span>
+                    <div class="process-title">Performance Impact</div>
+                    <div class="process-desc">What happens to database performance during these operations</div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Slide 3: Backup Types -->
+        <div class="slide" id="slide3">
+            <h2>📋 Types of Database Backups</h2>
+            <div class="backup-types">
+                <div class="backup-type full-backup">
+                    <h3>🎯 Full Backup</h3>
+                    <p><strong>What:</strong> Complete copy of entire database</p>
+                    <p><strong>When:</strong> All data pages + active transaction log</p>
+                    <p><strong>Size:</strong> Largest backup file</p>
+                    <p><strong>Speed:</strong> Slowest to create</p>
+                </div>
+                <div class="backup-type diff-backup">
+                    <h3>📊 Differential Backup</h3>
+                    <p><strong>What:</strong> Only changes since last FULL backup</p>
+                    <p><strong>When:</strong> Modified data pages only</p>
+                    <p><strong>Size:</strong> Smaller than full backup</p>
+                    <p><strong>Speed:</strong> Faster than full backup</p>
+                </div>
+                <div class="backup-type log-backup">
+                    <h3>📝 Transaction Log Backup</h3>
+                    <p><strong>What:</strong> Only transaction log entries</p>
+                    <p><strong>When:</strong> Continuous log activity</p>
+                    <p><strong>Size:</strong> Smallest backup file</p>
+                    <p><strong>Speed:</strong> Fastest to create</p>
+                </div>
+            </div>
+            <div class="key-point">
+                💡 <strong>Key Point:</strong> Full + Differential + Log backups = Complete database recovery capability
+            </div>
+        </div>
+        
+        <!-- Slide 4: Full Backup Process -->
+        <div class="slide" id="slide4">
+            <h2>📦 Full Backup - Internal Process</h2>
+            <div class="backup-animation" id="fullBackupAnimation">
+                <div class="db-component database">
+                    <div>🗄️</div>
+                    <div>Database</div>
+                    <div style="font-size: 10px;">.mdf/.ldf</div>
+                </div>
+                <div class="db-component backup-agent">
+                    <div>⚙️</div>
+                    <div>Backup Agent</div>
+                </div>
+                <div class="db-component backup-file">
+                    <div>💾</div>
+                    <div>Backup File</div>
+                    <div style="font-size: 10px;">.bak</div>
+                </div>
+                <div class="data-flow flow1"></div>
+                <div class="data-flow flow2"></div>
+            </div>
+            
+            <ul class="step-list">
+                <li><span class="step-number">1.</span> SQL Server starts backup operation</li>
+                <li><span class="step-number">2.</span> Places database in backup mode (allows reads, limits writes)</li>
+                <li><span class="step-number">3.</span> Reads ALL data pages sequentially from .mdf files</li>
+                <li><span class="step-number">4.</span> Copies active portion of transaction log (.ldf)</li>
+                <li><span class="step-number">5.</span> Writes compressed data to .bak file</li>
+                <li><span class="step-number">6.</span> Records backup metadata in msdb database</li>
+                <li><span class="step-number">7.</span> Removes backup mode restrictions</li>
+            </ul>
+            
+            <div class="sql-command">
+                BACKUP DATABASE StudentDB TO DISK = 'C:\Backups\StudentDB_Full.bak'
+                WITH COMPRESSION, CHECKSUM, STATS = 10;
+            </div>
+        </div>
+        
+        <!-- Slide 5: What Happens Inside Database -->
+        <div class="slide" id="slide5">
+            <h2>🔍 Inside the Database During Backup</h2>
+            
+            <h3>📊 Memory & Buffer Pool</h3>
+            <div class="process-card">
+                <div class="process-desc">
+                    • <strong>Buffer Pool:</strong> Continues serving regular queries<br>
+                    • <strong>Memory Usage:</strong> Backup process uses additional memory for I/O buffers<br>
+                    • <strong>Page Reads:</strong> Backup agent reads pages directly from disk (bypasses buffer pool for efficiency)
+                </div>
+            </div>
+            
+            <h3>🔒 Locking & Concurrency</h3>
+            <div class="process-card">
+                <div class="process-desc">
+                    • <strong>Shared Locks:</strong> Backup takes shared locks on database (allows reads)<br>
+                    • <strong>No Exclusive Locks:</strong> Other users can still query the database<br>
+                    • <strong>Schema Stability:</strong> Prevents structural changes during backup
+                </div>
+            </div>
+            
+            <h3>📝 Transaction Log Activity</h3>
+            <div class="process-card">
+                <div class="process-desc">
+                    • <strong>Log Sequence Numbers (LSN):</strong> Backup records start and end LSN<br>
+                    • <strong>Point-in-Time Recovery:</strong> LSNs enable precise restore points<br>
+                    • <strong>Active Transactions:</strong> In-progress transactions are included in backup
+                </div>
+            </div>
+            
+            <div class="key-point">
+                ⚠️ <strong>Performance Impact:</strong> Backup operations are I/O intensive and may slow down other database operations
+            </div>
+        </div>
+        
+        <!-- Slide 6: Restore Process -->
+        <div class="slide" id="slide6">
+            <h2>🔄 Database Restore - Internal Process</h2>
+            <div class="backup-animation">
+                <div class="db-component backup-file" style="left: 50px;">
+                    <div>💾</div>
+                    <div>Backup File</div>
+                    <div style="font-size: 10px;">.bak</div>
+                </div>
+                <div class="db-component backup-agent" style="left: 200px; background: linear-gradient(135deg, #9C27B0, #7B1FA2);">
+                    <div>🔧</div>
+                    <div>Restore Agent</div>
+                </div>
+                <div class="db-component database" style="right: 50px;">
+                    <div>🗄️</div>
+                    <div>New Database</div>
+                    <div style="font-size: 10px;">.mdf/.ldf</div>
+                </div>
+                <div class="data-flow flow1" style="background: linear-gradient(to bottom, #9C27B0, transparent);"></div>
+                <div class="data-flow flow2" style="background: linear-gradient(to bottom, #9C27B0, transparent);"></div>
+            </div>
+            
+            <ul class="step-list">
+                <li><span class="step-number">1.</span> SQL Server validates backup file integrity</li>
+                <li><span class="step-number">2.</span> Creates new database files (.mdf/.ldf) or overwrites existing</li>
+                <li><span class="step-number">3.</span> Database enters RESTORING state (offline to users)</li>
+                <li><span class="step-number">4.</span> Reads backup file and writes pages to data files</li>
+                <li><span class="step-number">5.</span> Applies transaction log from backup</li>
+                <li><span class="step-number">6.</span> Rolls back incomplete transactions</li>
+                <li><span class="step-number">7.</span> Brings database online and ready for use</li>
+            </ul>
+            
+            <div class="sql-command">
+                RESTORE DATABASE StudentDB FROM DISK = 'C:\Backups\StudentDB_Full.bak'
+                WITH REPLACE, CHECKDB, STATS = 10;
+            </div>
+        </div>
+        
+        <!-- Slide 7: Transaction Log Backup -->
+        <div class="slide" id="slide7">
+            <h2>📝 Transaction Log Backup Deep Dive</h2>
+            
+            <div class="demo-section">
+                <h3>🔄 Continuous Log Backup Process</h3>
+                <div class="process-grid">
+                    <div class="process-card">
+                        <span class="process-icon">📋</span>
+                        <div class="process-title">Log Record Reading</div>
+                        <div class="process-desc">Backup agent reads log records from Virtual Log Files (VLFs) in sequential order</div>
+                    </div>
+                    <div class="process-card">
+                        <span class="process-icon">✂️</span>
+                        <div class="process-title">Log Truncation</div>
+                        <div class="process-desc">After backup, inactive log space is marked as reusable (log truncation)</div>
+                    </div>
+                </div>
+            </div>
+            
+            <h3>🎯 Why Log Backups Matter</h3>
+            <ul class="step-list">
+                <li><span class="step-number">🕐</span> <strong>Point-in-Time Recovery:</strong> Restore to exact moment before disaster</li>
+                <li><span class="step-number">💿</span> <strong>Log Growth Control:</strong> Prevents transaction log from growing infinitely</li>
+                <li><span class="step-number">🔗</span> <strong>Log Chain:</strong> Maintains unbroken chain for complete recovery</li>
+                <li><span class="step-number">⚡</span> <strong>Minimal Impact:</strong> Fastest backup type with least performance impact</li>
+            </ul>
+            
+            <div class="sql-command">
+                BACKUP LOG StudentDB TO DISK = 'C:\Backups\StudentDB_Log.trn'
+                WITH CHECKSUM, STATS = 10;
+            </div>
+        </div>
+        
+        <!-- Slide 8: Performance & Best Practices -->
+        <div class="slide" id="slide8">
+            <h2>⚡ Performance Impact & Best Practices</h2>
+            
+            <div class="process-grid">
+                <div class="process-card">
+                    <span class="process-icon">🐌</span>
+                    <div class="process-title">Performance Impact</div>
+                    <div class="process-desc">
+                        • High disk I/O during backup<br>
+                        • Memory usage for backup buffers<br>
+                        • Network bandwidth for remote backups<br>
+                        • CPU usage for compression
+                    </div>
+                </div>
+                <div class="process-card">
+                    <span class="process-icon">⏰</span>
+                    <div class="process-title">Timing Strategies</div>
+                    <div class="process-desc">
+                        • Schedule during low-activity periods<br>
+                        • Use COMPRESSION to reduce I/O<br>
+                        • Limit backup to specific file groups<br>
+                        • Use multiple backup devices
+                    </div>
+                </div>
+            </div>
+            
+            <h3>📊 Backup Strategy Comparison</h3>
+            <table class="comparison-table">
+                <thead>
+                    <tr>
+                        <th>Backup Type</th>
+                        <th>Frequency</th>
+                        <th>Performance Impact</th>
+                        <th>Recovery Speed</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td><strong>Full Backup</strong></td>
+                        <td>Weekly/Monthly</td>
+                        <td>High (reads entire DB)</td>
+                        <td>Fast (single file restore)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Differential</strong></td>
+                        <td>Daily</td>
+                        <td>Medium (changed pages only)</td>
+                        <td>Medium (2 files: full + diff)</td>
+                    </tr>
+                    <tr>
+                        <td><strong>Transaction Log</strong></td>
+                        <td>Every 15-30 minutes</td>
+                        <td>Low (log records only)</td>
+                        <td>Slow (multiple log files)</td>
+                    </tr>
+                </tbody>
+            </table>
+            
+            <div class="key-point">
+                🎯 <strong>Best Practice:</strong> Combine all three types for optimal balance of performance and recovery capability
+            </div>
+        </div>
+        
+        <!-- Navigation -->
+        <div class="navigation">
+            <button class="nav-btn" id="prevBtn" onclick="previousSlide()">← Previous</button>
+            <button class="nav-btn" id="startAnimationBtn" onclick="startBackupAnimation()">🎬 Start Animation</button>
+            <button class="nav-btn" id="nextBtn" onclick="nextSlide()">Next →</button>
+        </div>
+    </div>
+
+    <script>
+        let currentSlide = 1;
+        const totalSlides = 8;
+        let animationRunning = false;
+        
+        // Update slide counter
+        function updateSlideCounter() {
+            document.getElementById('slideNumber').textContent = currentSlide;
+            document.getElementById('totalSlides').textContent = totalSlides;
+            
+            // Update navigation buttons
+            document.getElementById('prevBtn').disabled = currentSlide === 1;
+            document.getElementById('nextBtn').disabled = currentSlide === totalSlides;
+        }
+        
+        function showSlide(n) {
+            // Hide all slides
+            document.querySelectorAll('.slide').forEach(slide => {
+                slide.classList.remove('active');
+            });
+            
+            // Show target slide
+            const targetSlide = document.getElementById(`slide${n}`);
+            if (targetSlide) {
+                targetSlide.classList.add('active');
+                currentSlide = n;
+                updateSlideCounter();
+            }
+        }
+        
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                showSlide(currentSlide + 1);
+            }
+        }
+        
+        function previousSlide() {
+            if (currentSlide > 1) {
+                showSlide(currentSlide - 1);
+            }
+        }
+        
+        function startBackupAnimation() {
+            if (animationRunning) return;
+            
+            animationRunning = true;
+            const flows = document.querySelectorAll('.data-flow');
+            
+            // Animate backup process
+            setTimeout(() => {
+                flows[0].classList.add('active');
+            }, 500);
+            
+            setTimeout(() => {
+                flows[1].classList.add('active');
+            }, 1500);
+            
+            setTimeout(() => {
+                flows.forEach(flow => flow.classList.remove('active'));
+                animationRunning = false;
+            }, 4000);
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    previousSlide();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    nextSlide();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    startBackupAnimation();
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    showSlide(1);
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    showSlide(totalSlides);
+                    break;
+            }
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSlideCounter();
+            
+            // Add remaining slides
+            addDetailedSlides();
+        });
+        
+        function addDetailedSlides() {
+            const container = document.querySelector('.presentation-container');
+            
+            // Slide 5: Backup File Structure
+            const slide5 = document.createElement('div');
+            slide5.className = 'slide';
+            slide5.id = 'slide5';
+            slide5.innerHTML = `
+                <h2>📁 Backup File Internal Structure</h2>
+                <div class="process-grid">
+                    <div class="process-card">
+                        <span class="process-icon">📄</span>
+                        <div class="process-title">Header Information</div>
+                        <div class="process-desc">Database name, backup type, creation date, SQL Server version, checksums</div>
+                    </div>
+                    <div class="process-card">
+                        <span class="process-icon">🗂️</span>
+                        <div class="process-title">Data Pages</div>
+                        <div class="process-desc">Compressed copies of all database pages, maintaining original structure and relationships</div>
+                    </div>
+                    <div class="process-card">
+                        <span class="process-icon">📝</span>
+                        <div class="process-title">Log Records</div>
+                        <div class="process-desc">Active transaction log entries needed for consistency and point-in-time recovery</div>
+                    </div>
+                    <div class="process-card">
+                        <span class="process-icon">🔐</span>
+                        <div class="process-title">Metadata</div>
+                        <div class="process-desc">File locations, backup set information, recovery model, last LSN numbers</div>
+                    </div>
+                </div>
+                
+                <h3>🏗️ Physical Backup File Layout</h3>
+                <div style="background: rgba(0,0,0,0.4); padding: 20px; border-radius: 10px; margin: 20px 0;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin: 10px 0;">
+                        <div style="background: #FF6B6B; padding: 10px; border-radius: 5px; width: 15%;">Header</div>
+                        <div style="background: #4ECDC4; padding: 10px; border-radius: 5px; width: 60%;">Compressed Data Pages</div>
+                        <div style="background: #45B7D1; padding: 10px; border-radius: 5px; width: 20%;">Log Records</div>
+                    </div>
+                    <div style="font-size: 12px; text-align: center; margin-top: 10px; opacity: 0.8;">
+                        Backup File (.bak) Internal Structure
+                    </div>
+                </div>
+                
+                <div class="key-point">
+                    💡 <strong>Compression:</strong> SQL Server can compress backup files by 50-80% using built-in algorithms
+                </div>
+            `;
+            
+            // Slide 6: Restore Deep Dive
+            const slide6 = document.createElement('div');
+            slide6.className = 'slide';
+            slide6.id = 'slide6';
+            slide6.innerHTML = `
+                <h2>🔧 Restore Process - What Happens Inside</h2>
+                
+                <h3>🎯 Phase 1: Data Copy Phase</h3>
+                <ul class="step-list">
+                    <li><span class="step-number">1.</span> <strong>File Creation:</strong> Creates new .mdf and .ldf files with proper size</li>
+                    <li><span class="step-number">2.</span> <strong>Page Restoration:</strong> Copies data pages from backup to new database files</li>
+                    <li><span class="step-number">3.</span> <strong>Index Rebuilding:</strong> Reconstructs indexes and constraints</li>
+                </ul>
+                
+                <h3>🔄 Phase 2: Redo Phase</h3>
+                <ul class="step-list">
+                    <li><span class="step-number">4.</span> <strong>Transaction Replay:</strong> Applies all committed transactions from backup</li>
+                    <li><span class="step-number">5.</span> <strong>Forward Recovery:</strong> Brings database to consistent state</li>
+                    <li><span class="step-number">6.</span> <strong>Log Chain Verification:</strong> Ensures transaction log integrity</li>
+                </ul>
+                
+                <h3>↩️ Phase 3: Undo Phase</h3>
+                <ul class="step-list">
+                    <li><span class="step-number">7.</span> <strong>Rollback:</strong> Undoes any incomplete transactions</li>
+                    <li><span class="step-number">8.</span> <strong>Cleanup:</strong> Removes temporary structures and locks</li>
+                    <li><span class="step-number">9.</span> <strong>Online:</strong> Database becomes available for user connections</li>
+                </ul>
+                
+                <div class="key-point">
+                    ⚠️ <strong>Critical:</strong> During restore, database is completely offline - no user access allowed
+                </div>
+            `;
+            
+            // Slide 7: Recovery Models
+            const slide7 = document.createElement('div');
+            slide7.className = 'slide';
+            slide7.id = 'slide7';
+            slide7.innerHTML = `
+                <h2>🔧 Recovery Models Impact</h2>
+                
+                <div class="backup-types">
+                    <div class="backup-type" style="border-color: #4CAF50;">
+                        <h3>🎯 FULL Recovery Model</h3>
+                        <p><strong>Log Backup:</strong> Required frequently</p>
+                        <p><strong>Point-in-Time:</strong> ✅ Yes, to any second</p>
+                        <p><strong>Log Space:</strong> Grows until log backup</p>
+                        <p><strong>Best For:</strong> Production databases</p>
+                    </div>
+                    <div class="backup-type" style="border-color: #FF9800;">
+                        <h3>📊 SIMPLE Recovery Model</h3>
+                        <p><strong>Log Backup:</strong> ❌ Not allowed</p>
+                        <p><strong>Point-in-Time:</strong> ❌ Only to backup time</p>
+                        <p><strong>Log Space:</strong> Auto-truncated after checkpoint</p>
+                        <p><strong>Best For:</strong> Development/Test databases</p>
+                    </div>
+                    <div class="backup-type" style="border-color: #2196F3;">
+                        <h3>📝 BULK_LOGGED Recovery</h3>
+                        <p><strong>Log Backup:</strong> ✅ Yes, but limited</p>
+                        <p><strong>Point-in-Time:</strong> ⚠️ Limited during bulk operations</p>
+                        <p><strong>Log Space:</strong> Minimal logging for bulk ops</p>
+                        <p><strong>Best For:</strong> Large data imports</p>
+                    </div>
+                </div>
+                
+                <h3>🔍 What Happens in Each Recovery Model</h3>
+                <div class="demo-section">
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+                        <div>
+                            <h4 style="color: #4CAF50; margin-bottom: 15px;">🟢 FULL Model - During Backup:</h4>
+                            <ul style="list-style-type: none; font-size: 14px;">
+                                <li>• Transaction log fully logged</li>
+                                <li>• All operations recorded</li>
+                                <li>• Log chain maintained</li>
+                                <li>• Point-in-time recovery possible</li>
+                            </ul>
+                        </div>
+                        <div>
+                            <h4 style="color: #FF9800; margin-bottom: 15px;">🟡 SIMPLE Model - During Backup:</h4>
+                            <ul style="list-style-type: none; font-size: 14px;">
+                                <li>• Log auto-truncated</li>
+                                <li>• No log backup needed</li>
+                                <li>• Can only restore to backup point</li>
+                                <li>• Simpler management</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            // Slide 8: Summary
+            const slide8 = document.createElement('div');
+            slide8.className = 'slide';
+            slide8.id = 'slide8';
+            slide8.innerHTML = `
+                <h2>🎓 Key Takeaways</h2>
+                
+                <div class="process-grid">
+                    <div class="process-card">
+                        <span class="process-icon">📦</span>
+                        <div class="process-title">Backup Process</div>
+                        <div class="process-desc">
+                            <strong>Reads:</strong> Data pages + Active log<br>
+                            <strong>Impact:</strong> High I/O, shared locks<br>
+                            <strong>Output:</strong> Compressed .bak file
+                        </div>
+                    </div>
+                    <div class="process-card">
+                        <span class="process-icon">🔄</span>
+                        <div class="process-title">Restore Process</div>
+                        <div class="process-desc">
+                            <strong>Phases:</strong> Copy → Redo → Undo<br>
+                            <strong>State:</strong> Database offline during restore<br>
+                            <strong>Result:</strong> Consistent, usable database
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="demo-section">
+                    <h3>🛠️ Complete Backup Strategy Commands</h3>
+                    <div class="sql-command">
+-- Full Backup (Weekly)
+BACKUP DATABASE StudentDB 
+TO DISK = 'C:\\Backups\\StudentDB_Full.bak'
+WITH COMPRESSION, CHECKSUM;
+
+-- Differential Backup (Daily)  
+BACKUP DATABASE StudentDB 
+TO DISK = 'C:\\Backups\\StudentDB_Diff.bak'
+WITH DIFFERENTIAL, COMPRESSION;
+
+-- Log Backup (Every 15 mins)
+BACKUP LOG StudentDB 
+TO DISK = 'C:\\Backups\\StudentDB_Log.trn';
+
+-- Point-in-Time Restore
+RESTORE DATABASE StudentDB 
+FROM DISK = 'C:\\Backups\\StudentDB_Full.bak'
+WITH NORECOVERY;
+
+RESTORE DATABASE StudentDB 
+FROM DISK = 'C:\\Backups\\StudentDB_Diff.bak'  
+WITH NORECOVERY;
+
+RESTORE LOG StudentDB 
+FROM DISK = 'C:\\Backups\\StudentDB_Log.trn'
+WITH STOPAT = '2025-08-28 14:30:00';
+                    </div>
+                </div>
+                
+                <div class="key-point">
+                    🎯 <strong>Remember:</strong> Backup is only as good as your restore plan. Test your backups regularly!
+                </div>
+                
+                <div style="text-align: center; margin-top: 30px; font-size: 1.2rem;">
+                    <span style="color: #4CAF50;">✅ Thank you for learning about SQL Server Backup & Restore!</span>
+                </div>
+            `;
+            
+            // Insert slides before navigation
+            const navigation = document.querySelector('.navigation');
+            container.insertBefore(slide5, navigation);
+            container.insertBefore(slide6, navigation);
+            container.insertBefore(slide7, navigation);
+            container.insertBefore(slide8, navigation);
+        }
+        
+        function nextSlide() {
+            if (currentSlide < totalSlides) {
+                showSlide(currentSlide + 1);
+            }
+        }
+        
+        function previousSlide() {
+            if (currentSlide > 1) {
+                showSlide(currentSlide - 1);
+            }
+        }
+        
+        function startBackupAnimation() {
+            if (animationRunning) return;
+            
+            animationRunning = true;
+            const flows = document.querySelectorAll('.data-flow');
+            const button = document.getElementById('startAnimationBtn');
+            
+            button.textContent = '🔄 Running...';
+            button.disabled = true;
+            
+            // Animate backup flow
+            setTimeout(() => {
+                flows[0].classList.add('active');
+            }, 500);
+            
+            setTimeout(() => {
+                flows[1].classList.add('active');
+            }, 1500);
+            
+            setTimeout(() => {
+                flows.forEach(flow => flow.classList.remove('active'));
+                button.textContent = '🎬 Start Animation';
+                button.disabled = false;
+                animationRunning = false;
+            }, 4000);
+        }
+        
+        // Keyboard navigation
+        document.addEventListener('keydown', function(e) {
+            switch(e.key) {
+                case 'ArrowLeft':
+                    e.preventDefault();
+                    previousSlide();
+                    break;
+                case 'ArrowRight':
+                    e.preventDefault();
+                    nextSlide();
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    startBackupAnimation();
+                    break;
+                case 'Home':
+                    e.preventDefault();
+                    showSlide(1);
+                    break;
+                case 'End':
+                    e.preventDefault();
+                    showSlide(totalSlides);
+                    break;
+            }
+        });
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            updateSlideCounter();
+        });
+    </script>
+</body>
+</html>
