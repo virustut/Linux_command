@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Database Backup & Restore</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+  <!-- Reveal.js Core CSS -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/theme/black.css" id="theme">
+
+  <style>
+    .reveal section {
+      font-size: 1.2em;
+    }
+
+    h2 {
+      color: #f0db4f;
+    }
+
+    ul {
+      list-style-type: square;
+    }
+
+    /* Pulse animation */
+    @keyframes pulse {
+      0% { transform: scale(0.95); opacity: 0.6; }
+      50% { transform: scale(1); opacity: 1; }
+      100% { transform: scale(0.95); opacity: 0.6; }
+    }
+
+    .pulse {
+      animation: pulse 1.5s ease-in-out;
+    }
+
+    .step-box {
+      background-color: rgba(255, 255, 255, 0.1);
+      padding: 12px 20px;
+      margin: 10px 0;
+      border-radius: 10px;
+      border: 1px solid #888;
+      width: 80%;
+      text-align: center;
+    }
+  </style>
+</head>
+<body>
+  <div class="reveal">
+    <div class="slides" data-transition="slide">
+
+      <!-- Title Slide -->
+      <section data-transition="zoom">
+        <h1>Database Backup & Restore</h1>
+        <p class="fragment">What Happens Behind the Scenes</p>
+      </section>
+
+      <!-- What is a Backup -->
+      <section data-transition="fade">
+        <h2>What is a Database Backup?</h2>
+        <ul>
+          <li class="fragment">A copy of the database at a point in time</li>
+          <li class="fragment">Used to protect data from loss or corruption</li>
+        </ul>
+      </section>
+
+      <!-- Why Take Backups -->
+      <section data-transition="slide">
+        <h2>Why Take Backups?</h2>
+        <ul>
+          <li class="fragment">Data Recovery (hardware failure, human error)</li>
+          <li class="fragment">Disaster Recovery (natural disasters, ransomware)</li>
+          <li class="fragment">Testing / Migration / Archival</li>
+        </ul>
+      </section>
+
+      <!-- Types of Backups -->
+      <section data-transition="convex">
+        <h2>Types of Backups</h2>
+        <ul>
+          <li class="fragment"><strong>Full:</strong> Complete copy of the database</li>
+          <li class="fragment"><strong>Incremental:</strong> Only changes since last backup</li>
+          <li class="fragment"><strong>Differential:</strong> Changes since last full backup</li>
+        </ul>
+      </section>
+
+      <!-- Internal Process of Backup -->
+      <section data-transition="concave">
+        <h2>What Happens Internally During Backup?</h2>
+        <ul>
+          <li class="fragment">Database engine locks or uses snapshots</li>
+          <li class="fragment">Reads all data blocks (or changed ones)</li>
+          <li class="fragment">Writes to backup file (.bak, .sql, etc.)</li>
+          <li class="fragment">Backup metadata is recorded</li>
+        </ul>
+      </section>
+
+      <!-- 🎬 Animated Visual Backup Flow -->
+      <section data-transition="fade">
+        <h2>🔄 Inside the Backup Process</h2>
+        <div style="display: flex; flex-direction: column; align-items: center;">
+
+          <div class="fragment step-box pulse">
+            🟡 Step 1: <strong>Snapshot or Lock</strong> taken (optional)
+          </div>
+
+          <div class="fragment step-box pulse">
+            📤 Step 2: <strong>Engine reads data blocks</strong> from disk
+          </div>
+
+          <div class="fragment step-box pulse">
+            🗃️ Step 3: <strong>Writes copied data</strong> to backup file (.bak, .sql, etc.)
+          </div>
+
+          <div class="fragment step-box pulse">
+            📝 Step 4: <strong>Backup logs & metadata</strong> are recorded
+          </div>
+
+          <div class="fragment step-box pulse">
+            ✅ Step 5: <strong>Backup Complete</strong>
+          </div>
+
+        </div>
+      </section>
+
+      <!-- Restore Process -->
+      <section data-transition="zoom">
+        <h2>Restore Process Overview</h2>
+        <ul>
+          <li class="fragment">Select backup file(s)</li>
+          <li class="fragment">Stop or isolate database</li>
+          <li class="fragment">Start restoring data into data files</li>
+          <li class="fragment">Apply logs if needed</li>
+        </ul>
+      </section>
+
+      <!-- Internal Process of Restore -->
+      <section data-transition="fade">
+        <h2>What Happens Internally During Restore?</h2>
+        <ul>
+          <li class="fragment">Database files are re-created from backup</li>
+          <li class="fragment">Transaction logs replayed (point-in-time recovery)</li>
+          <li class="fragment">Database checks consistency</li>
+          <li class="fragment">Database brought online</li>
+        </ul>
+      </section>
+
+      <!-- Best Practices -->
+      <section data-transition="slide">
+        <h2>Best Practices</h2>
+        <ul>
+          <li class="fragment">Automate and schedule backups</li>
+          <li class="fragment">Test restores regularly</li>
+          <li class="fragment">Store backups in multiple locations</li>
+          <li class="fragment">Use encryption and compression</li>
+        </ul>
+      </section>
+
+      <!-- Thank You Slide -->
+      <section data-transition="zoom">
+        <h2>Thank You!</h2>
+        <p class="fragment">Questions?</p>
+      </section>
+
+    </div>
+  </div>
+
+  <!-- Reveal.js Scripts -->
+  <script src="https://cdn.jsdelivr.net/npm/reveal.js@4/dist/reveal.min.js"></script>
+  <script>
+    Reveal.initialize({
+      transition: 'slide', // Default transition
+      fragments: true
+    });
+  </script>
+</body>
+</html>
