@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Server Backup Command Execution - Internal Flow</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background: linear-gradient(135deg, #0f0f23, #1a1a3e, #2d2d5f);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh; overflow: hidden; color: white;
+        }
+        .container { width: 100vw; height: 100vh; display: flex; flex-direction: column; }
+        .header { background: rgba(0,0,0,0.8); padding: 20px; text-align: center; border-bottom: 2px solid rgba(76,175,80,0.3); }
+        .header h1 { font-size: 2rem; background: linear-gradient(45deg, #4CAF50, #45a049); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+        .main-content { flex: 1; display: flex; }
+        .command-panel {
+            width: 350px; background: rgba(0,0,0,0.9); padding: 25px;
+            border-right: 2px solid rgba(76,175,80,0.3); display: flex; flex-direction: column;
+        }
+        .sql-editor {
+            background: rgba(20,20,40,0.9); border: 2px solid rgba(76,175,80,0.5);
+            border-radius: 10px; padding: 15px; margin: 15px 0; font-family: monospace;
+            color: #00ff88; height: 120px; font-size: 14px;
+        }
+        .execute-btn {
+            background: linear-gradient(45deg, #4CAF50, #45a049); border: none;
+            padding: 15px 25px; border-radius: 25px; color: white; font-weight: bold;
+            font-size: 16px; cursor: pointer; transition: 0.3s; box-shadow: 0 4px 15px rgba(76,175,80,0.3);
+        }
+        .execute-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .job-section { margin-top: 30px; padding: 20px; background: rgba(255,152,0,0.1); border: 1px solid rgba(255,152,0,0.3); border-radius: 10px; }
+        .job-btn {
+            background: linear-gradient(45deg, #FF9800, #F57C00); border: none; padding: 12px; border-radius: 20px;
+            color: white; font-weight: bold; cursor: pointer; margin: 5px 0;
+        }
+        .flow-panel { flex: 1; position: relative; padding: 20px; }
+        .execution-stage {
+            position: absolute; background: rgba(255,255,255,0.1); border: 2px solid rgba(255,255,255,0.2);
+            border-radius: 15px; padding: 15px; text-align: center; opacity: 0.3; transform: scale(0.9); transition: 0.5s;
+        }
+        .execution-stage.active { opacity: 1; transform: scale(1); border-color: #4CAF50; box-shadow: 0 0 20px rgba(76,175,80,0.5); background: rgba(76,175,80,0.1); }
+        .stage-1 { top: 50px; left: 50px; width: 200px; height: 80px; }
+        .stage-2 { top: 50px; left: 300px; width: 200px; height: 80px; }
+        .stage-3 { top: 50px; right: 50px; width: 200px; height: 80px; }
+        .stage-4 { top: 180px; left: 50px; width: 200px; height: 80px; }
+        .stage-5 { top: 180px; left: 300px; width: 200px; height: 80px; }
+        .stage-6 { top: 180px; right: 50px; width: 200px; height: 80px; }
+        .stage-7 { top: 310px; left: 175px; width: 200px; height: 80px; }
+        .stage-8 { top: 310px; right: 175px; width: 200px; height: 80px; }
+        .stage-9 { bottom: 50px; left: 50%; transform: translateX(-50%); width: 300px; height: 80px; }
+        .stage-icon { font-size: 24px; display: block; }
+        .stage-title { font-weight: bold; font-size: 14px; }
+        .connection { position: absolute; height: 3px; background: linear-gradient(90deg, transparent,#666,transparent); opacity: 0.4; transition: 0.5s; }
+        .connection.active { background: linear-gradient(90deg, transparent,#4CAF50,transparent); opacity: 1; box-shadow: 0 0 10px #4CAF50; }
+        .details-panel { width: 400px; background: rgba(0,0,0,0.9); padding: 25px; border-left: 2px solid rgba(76,175,80,0.3); overflow-y: auto; }
+        .current-step { background: rgba(76,175,80,0.1); padding: 20px; border-radius: 10px; margin-bottom: 20px; }
+        .progress-bar { width: 100%; height: 8px; background: rgba(255,255,255,0.2); border-radius: 4px; margin: 20px 0; }
+        .progress-fill { height: 100%; background: linear-gradient(45deg, #4CAF50, #45a049); width: 0%; transition: 0.5s; }
+        .log-section { background: rgba(0,0,0,0.6); border-radius: 8px; padding: 15px; margin: 15px 0; max-height: 200px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.1); }
+        .log-entry { font-family: monospace; font-size: 12px; margin: 5px 0; }
+        .log-entry.success { color: #4CAF50; }
+        .log-entry.error { color: #f44336; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div class="header">
+        <h1>⚙️ SQL Server Backup Command Execution Flow</h1>
+        <p style="font-size:14px;opacity:0.8;margin-top:10px;">Press <strong>Execute</strong> then use <strong>TAB</strong> to step through stages</p>
+    </div>
+    <div class="main-content">
+        <!-- Left Panel -->
+        <div class="command-panel">
+            <h3>💻 Execute SQL Command</h3>
+            <textarea class="sql-editor" id="sqlCommand">BACKUP DATABASE StudentDB 
+TO DISK = 'C:\\Backup\\StudentDB.bak' 
+WITH COMPRESSION, CHECKSUM;</textarea>
+            <button class="execute-btn" id="executeBtn" onclick="executeBackup()">▶️ Execute Command</button>
+        </div>
+
+        <!-- Flow Panel -->
+        <div class="flow-panel">
+            <div class="execution-stage stage-1" id="stage1"><span class="stage-icon">📝</span><div class="stage-title">Command Parser</div></div>
+            <div class="execution-stage stage-2" id="stage2"><span class="stage-icon">🔐</span><div class="stage-title">Security Check</div></div>
+            <div class="execution-stage stage-3" id="stage3"><span class="stage-icon">🎯</span><div class="stage-title">Backup Engine</div></div>
+            <div class="execution-stage stage-4" id="stage4"><span class="stage-icon">🗄️</span><div class="stage-title">Database Lock</div></div>
+            <div class="execution-stage stage-5" id="stage5"><span class="stage-icon">📊</span><div class="stage-title">Page Reader</div></div>
+            <div class="execution-stage stage-6" id="stage6"><span class="stage-icon">🗜️</span><div class="stage-title">Compression</div></div>
+            <div class="execution-stage stage-7" id="stage7"><span class="stage-icon">💾</span><div class="stage-title">File Writer</div></div>
+            <div class="execution-stage stage-8" id="stage8"><span class="stage-icon">✅</span><div class="stage-title">Verification</div></div>
+            <div class="execution-stage stage-9" id="stage9"><span class="stage-icon">📋</span><div class="stage-title">Metadata Update</div></div>
+        </div>
+
+        <!-- Right Panel -->
+        <div class="details-panel">
+            <div class="current-step" id="currentStep">
+                <div class="step-title">Ready to Execute</div>
+                <div class="step-details">Click Execute then press TAB to move stage-by-stage.</div>
+            </div>
+            <div class="progress-bar"><div class="progress-fill" id="progressBar"></div></div>
+            <div class="log-section"><h4>📋 Execution Log</h4><div id="executionLog"><div class="log-entry">System ready...</div></div></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let isExecuting = false, currentStage = 0, startTime = null;
+
+    const stages = [
+        { title: "Command Parser", logMessage: "Parsing BACKUP DATABASE command..." },
+        { title: "Security Check", logMessage: "Validating user permissions..." },
+        { title: "Backup Engine Init", logMessage: "Initializing backup engine..." },
+        { title: "Database Lock", logMessage: "Acquiring database locks..." },
+        { title: "Page Reader", logMessage: "Reading database pages..." },
+        { title: "Compression", logMessage: "Compressing data..." },
+        { title: "File Writer", logMessage: "Writing backup file..." },
+        { title: "Verification", logMessage: "Verifying backup integrity..." },
+        { title: "Metadata Update", logMessage: "Updating backup history..." }
+    ];
+
+    function executeBackup() {
+        resetExecution();
+        isExecuting = true;
+        currentStage = 0;
+        startTime = new Date();
+        document.getElementById('executeBtn').disabled = true;
+        document.getElementById('executeBtn').textContent = '⏳ Executing (Press TAB to Step)...';
+        addLogEntry('Execution started...', 'success');
+    }
+
+    function executeNextStage() {
+        if (currentStage >= stages.length) { completeExecution(); return; }
+        const s = stages[currentStage];
+        document.getElementById(`stage${currentStage+1}`).classList.add('active');
+        updateCurrentStep(s.title, s.logMessage);
+        addLogEntry(s.logMessage, 'success');
+        document.getElementById('progressBar').style.width = ((currentStage+1)/stages.length*100)+"%";
+        currentStage++;
+    }
+
+    function completeExecution() {
+        addLogEntry("✅ Backup completed successfully!", "success");
+        document.getElementById('executeBtn').disabled = false;
+        document.getElementById('executeBtn').textContent = '▶️ Execute Command';
+    }
+
+    function updateCurrentStep(title, details) {
+        document.getElementById('currentStep').innerHTML =
+            `<div class="step-title">${title}</div><div class="step-details">${details}</div>`;
+    }
+
+    function addLogEntry(msg, type) {
+        const log = document.getElementById('executionLog');
+        const div = document.createElement('div');
+        div.className = `log-entry ${type}`;
+        div.textContent = msg;
+        log.appendChild(div);
+        log.scrollTop = log.scrollHeight;
+    }
+
+    function resetExecution() {
+        isExecuting = false; currentStage = 0;
+        document.querySelectorAll('.execution-stage').forEach(e=>e.classList.remove('active'));
+        document.getElementById('progressBar').style.width="0%";
+        document.getElementById('executionLog').innerHTML='<div class="log-entry">System ready...</div>';
+    }
+
+    // ⌨️ Press TAB to step forward
+    document.addEventListener("keydown", e => {
+        if (e.key === "Tab") {
+            e.preventDefault();
+            if (isExecuting) executeNextStage();
+            else executeBackup();
+        }
+    });
+</script>
+</body>
+</html>
