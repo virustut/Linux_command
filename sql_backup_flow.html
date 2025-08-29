@@ -1,0 +1,989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Server Backup Command Execution - Internal Flow</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #0f0f23 0%, #1a1a3e 50%, #2d2d5f 100%);
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            height: 100vh;
+            overflow: hidden;
+            color: white;
+        }
+        
+        .container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Header */
+        .header {
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            text-align: center;
+            border-bottom: 2px solid rgba(76, 175, 80, 0.3);
+        }
+        
+        .header h1 {
+            font-size: 2rem;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            -webkit-background-clip: text;
+            background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        
+        /* Main Content Area */
+        .main-content {
+            flex: 1;
+            display: flex;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        /* Left Panel - Command Entry */
+        .command-panel {
+            width: 350px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 25px;
+            border-right: 2px solid rgba(76, 175, 80, 0.3);
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .sql-editor {
+            background: rgba(20, 20, 40, 0.9);
+            border: 2px solid rgba(76, 175, 80, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin: 15px 0;
+            font-family: 'Courier New', monospace;
+            color: #00ff88;
+            resize: none;
+            height: 120px;
+            font-size: 14px;
+        }
+        
+        .execute-btn {
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            border: none;
+            padding: 15px 25px;
+            border-radius: 25px;
+            color: white;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(76, 175, 80, 0.3);
+        }
+        
+        .execute-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
+        }
+        
+        .execute-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .job-section {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 152, 0, 0.1);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 152, 0, 0.3);
+        }
+        
+        .job-btn {
+            background: linear-gradient(45deg, #FF9800, #F57C00);
+            border: none;
+            padding: 12px 20px;
+            border-radius: 20px;
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            width: 100%;
+            margin: 5px 0;
+        }
+        
+        .job-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        /* Center Panel - Execution Flow */
+        .flow-panel {
+            flex: 1;
+            position: relative;
+            padding: 20px;
+            overflow: hidden;
+        }
+        
+        .execution-stage {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.1);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-radius: 15px;
+            padding: 15px;
+            text-align: center;
+            transition: all 0.5s ease;
+            opacity: 0.3;
+            transform: scale(0.9);
+        }
+        
+        .execution-stage.active {
+            opacity: 1;
+            transform: scale(1);
+            border-color: #4CAF50;
+            box-shadow: 0 0 20px rgba(76, 175, 80, 0.5);
+            background: rgba(76, 175, 80, 0.1);
+        }
+        
+        .execution-stage.processing {
+            animation: pulse 1s infinite;
+        }
+        
+        .execution-stage.completed {
+            border-color: #4CAF50;
+            background: rgba(76, 175, 80, 0.2);
+            opacity: 0.8;
+        }
+        
+        @keyframes pulse {
+            0% { transform: scale(1); box-shadow: 0 0 20px rgba(76, 175, 80, 0.5); }
+            50% { transform: scale(1.05); box-shadow: 0 0 30px rgba(76, 175, 80, 0.8); }
+            100% { transform: scale(1); box-shadow: 0 0 20px rgba(76, 175, 80, 0.5); }
+        }
+        
+        /* Stage Positions */
+        .stage-1 { top: 50px; left: 50px; width: 200px; height: 80px; }
+        .stage-2 { top: 50px; left: 300px; width: 200px; height: 80px; }
+        .stage-3 { top: 50px; right: 50px; width: 200px; height: 80px; }
+        .stage-4 { top: 180px; left: 50px; width: 200px; height: 80px; }
+        .stage-5 { top: 180px; left: 300px; width: 200px; height: 80px; }
+        .stage-6 { top: 180px; right: 50px; width: 200px; height: 80px; }
+        .stage-7 { top: 310px; left: 175px; width: 200px; height: 80px; }
+        .stage-8 { top: 310px; right: 175px; width: 200px; height: 80px; }
+        .stage-9 { bottom: 50px; left: 50%; transform: translateX(-50%); width: 300px; height: 80px; }
+        
+        .stage-icon {
+            font-size: 24px;
+            display: block;
+            margin-bottom: 5px;
+        }
+        
+        .stage-title {
+            font-size: 14px;
+            font-weight: bold;
+            margin-bottom: 3px;
+        }
+        
+        .stage-desc {
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        
+        /* Connection Lines */
+        .connection {
+            position: absolute;
+            height: 3px;
+            background: linear-gradient(90deg, transparent, #666, transparent);
+            opacity: 0.4;
+            transition: all 0.5s ease;
+        }
+        
+        .connection.active {
+            background: linear-gradient(90deg, transparent, #4CAF50, transparent);
+            opacity: 1;
+            box-shadow: 0 0 10px #4CAF50;
+            animation: flowAnimation 1s ease-in-out;
+        }
+        
+        @keyframes flowAnimation {
+            0% { background: linear-gradient(90deg, transparent, #666, transparent); }
+            50% { background: linear-gradient(90deg, transparent, #4CAF50, #4CAF50); }
+            100% { background: linear-gradient(90deg, transparent, #4CAF50, transparent); }
+        }
+        
+        /* Right Panel - Details */
+        .details-panel {
+            width: 400px;
+            background: rgba(0, 0, 0, 0.9);
+            padding: 25px;
+            border-left: 2px solid rgba(76, 175, 80, 0.3);
+            overflow-y: auto;
+        }
+        
+        .current-step {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid rgba(76, 175, 80, 0.3);
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        
+        .step-title {
+            color: #4CAF50;
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .step-details {
+            font-size: 14px;
+            line-height: 1.6;
+            opacity: 0.9;
+        }
+        
+        .technical-details {
+            background: rgba(0, 0, 0, 0.5);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #FFD700;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(45deg, #4CAF50, #45a049);
+            width: 0%;
+            transition: width 0.5s ease;
+        }
+        
+        .controls {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        
+        .control-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 20px;
+            background: linear-gradient(45deg, #2196F3, #1976D2);
+            color: white;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .control-btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .command-examples {
+            margin-top: 20px;
+        }
+        
+        .example-btn {
+            background: rgba(33, 150, 243, 0.2);
+            border: 1px solid rgba(33, 150, 243, 0.5);
+            color: #2196F3;
+            padding: 8px 12px;
+            border-radius: 15px;
+            font-size: 12px;
+            cursor: pointer;
+            margin: 5px;
+            transition: all 0.3s ease;
+        }
+        
+        .example-btn:hover {
+            background: rgba(33, 150, 243, 0.3);
+        }
+        
+        .log-section {
+            background: rgba(0, 0, 0, 0.6);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 15px 0;
+            max-height: 200px;
+            overflow-y: auto;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .log-entry {
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            margin: 5px 0;
+            opacity: 0.8;
+        }
+        
+        .log-entry.success {
+            color: #4CAF50;
+        }
+        
+        .log-entry.warning {
+            color: #FF9800;
+        }
+        
+        .log-entry.error {
+            color: #f44336;
+        }
+        
+        .timing-info {
+            background: rgba(255, 152, 0, 0.1);
+            border: 1px solid rgba(255, 152, 0, 0.3);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 15px 0;
+            font-size: 13px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>⚙️ SQL Server Backup Command Execution Flow</h1>
+            <p style="font-size: 14px; opacity: 0.8; margin-top: 10px;">
+                See what happens inside SQL Server when you execute BACKUP DATABASE or run a scheduled job
+            </p>
+        </div>
+        
+        <div class="main-content">
+            <!-- Left Panel - Command Entry -->
+            <div class="command-panel">
+                <h3 style="margin-bottom: 15px;">💻 Execute SQL Command</h3>
+                <textarea class="sql-editor" id="sqlCommand" placeholder="BACKUP DATABASE StudentDB TO DISK = 'C:\Backup\StudentDB.bak' WITH COMPRESSION, CHECKSUM;">BACKUP DATABASE StudentDB 
+TO DISK = 'C:\Backup\StudentDB.bak' 
+WITH COMPRESSION, CHECKSUM;</textarea>
+                
+                <button class="execute-btn" id="executeBtn">
+                    ▶️ Execute Command
+                </button>
+                
+                <div class="command-examples">
+                    <h4 style="font-size: 14px; margin: 15px 0 10px 0;">📝 Quick Examples:</h4>
+                    <button class="example-btn" data-example="full">Full Backup</button>
+                    <button class="example-btn" data-example="diff">Differential</button>
+                    <button class="example-btn" data-example="log">Log Backup</button>
+                    <button class="example-btn" data-example="restore">Restore</button>
+                </div>
+                
+                <!-- Job Section -->
+                <div class="job-section">
+                    <h4>🕐 SQL Server Agent Job</h4>
+                    <p style="font-size: 12px; margin: 10px 0; opacity: 0.8;">
+                        Simulate scheduled backup job execution
+                    </p>
+                    <button class="job-btn" id="simulateJobBtn">🚀 Run Scheduled Job</button>
+                    <button class="job-btn" id="simulateJobFailureBtn">❌ Simulate Job Failure</button>
+                </div>
+            </div>
+            
+            <!-- Center Panel - Execution Flow -->
+            <div class="flow-panel">
+                <!-- Execution Stages -->
+                <div class="execution-stage stage-1" id="stage1">
+                    <span class="stage-icon">📝</span>
+                    <div class="stage-title">Command Parser</div>
+                    <div class="stage-desc">Syntax validation</div>
+                </div>
+                
+                <div class="execution-stage stage-2" id="stage2">
+                    <span class="stage-icon">🔐</span>
+                    <div class="stage-title">Security Check</div>
+                    <div class="stage-desc">Permission validation</div>
+                </div>
+                
+                <div class="execution-stage stage-3" id="stage3">
+                    <span class="stage-icon">🎯</span>
+                    <div class="stage-title">Backup Engine</div>
+                    <div class="stage-desc">Initialize backup</div>
+                </div>
+                
+                <div class="execution-stage stage-4" id="stage4">
+                    <span class="stage-icon">🗄️</span>
+                    <div class="stage-title">Database Lock</div>
+                    <div class="stage-desc">Acquire shared locks</div>
+                </div>
+                
+                <div class="execution-stage stage-5" id="stage5">
+                    <span class="stage-icon">📊</span>
+                    <div class="stage-title">Page Reader</div>
+                    <div class="stage-desc">Read data pages</div>
+                </div>
+                
+                <div class="execution-stage stage-6" id="stage6">
+                    <span class="stage-icon">🗜️</span>
+                    <div class="stage-title">Compression</div>
+                    <div class="stage-desc">Compress data</div>
+                </div>
+                
+                <div class="execution-stage stage-7" id="stage7">
+                    <span class="stage-icon">💾</span>
+                    <div class="stage-title">File Writer</div>
+                    <div class="stage-desc">Write to disk</div>
+                </div>
+                
+                <div class="execution-stage stage-8" id="stage8">
+                    <span class="stage-icon">✅</span>
+                    <div class="stage-title">Verification</div>
+                    <div class="stage-desc">Checksum validation</div>
+                </div>
+                
+                <div class="execution-stage stage-9" id="stage9">
+                    <span class="stage-icon">📋</span>
+                    <div class="stage-title">Metadata Update</div>
+                    <div class="stage-desc">Update backup history</div>
+                </div>
+                
+                <!-- Connection Lines -->
+                <div class="connection" id="conn1" style="top: 90px; left: 250px; width: 50px;"></div>
+                <div class="connection" id="conn2" style="top: 90px; right: 250px; width: 50px;"></div>
+                <div class="connection" id="conn3" style="top: 140px; right: 150px; width: 50px; transform: rotate(90deg);"></div>
+                <div class="connection" id="conn4" style="top: 220px; left: 250px; width: 50px;"></div>
+                <div class="connection" id="conn5" style="top: 220px; right: 250px; width: 50px;"></div>
+                <div class="connection" id="conn6" style="top: 270px; right: 150px; width: 50px; transform: rotate(90deg);"></div>
+                <div class="connection" id="conn7" style="top: 350px; left: 375px; width: 50px;"></div>
+                <div class="connection" id="conn8" style="top: 400px; left: 275px; width: 100px; transform: rotate(45deg);"></div>
+            </div>
+            
+            <!-- Right Panel - Details -->
+            <div class="details-panel">
+                <div class="current-step" id="currentStep">
+                    <div class="step-title">Ready to Execute</div>
+                    <div class="step-details">
+                        Click "Execute Command" or "Run Scheduled Job" to see the internal execution flow.
+                        Watch as SQL Server processes your backup command step by step.
+                    </div>
+                </div>
+                
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressBar"></div>
+                </div>
+                
+                <div class="timing-info" id="timingInfo">
+                    ⏱️ <strong>Execution Time:</strong> Not started
+                </div>
+                
+                <div class="technical-details" id="technicalDetails">
+                    <strong>💡 What You'll Learn:</strong><br>
+                    • Command parsing and validation<br>
+                    • Security and permission checks<br>
+                    • Database locking mechanisms<br>
+                    • Page reading and compression<br>
+                    • File I/O operations<br>
+                    • Backup verification process<br>
+                    • Metadata and history updates
+                </div>
+                
+                <div class="log-section">
+                    <h4 style="margin-bottom: 10px;">📋 Execution Log</h4>
+                    <div id="executionLog">
+                        <div class="log-entry">System ready for backup execution...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Controls -->
+        <div class="controls">
+            <button class="control-btn" id="pauseBtn">⏸️ Pause</button>
+            <button class="control-btn" id="resetBtn">🔄 Reset</button>
+            <button class="control-btn" id="helpBtn">❓ Help</button>
+        </div>
+    </div>
+
+    <script>
+        let isExecuting = false;
+        let isPaused = false;
+        let currentStage = 0;
+        let executionTimeout = null;
+        let startTime = null;
+        
+        const stages = [
+            {
+                title: "1. Command Parser",
+                details: `<strong>SQL Command Parser Analysis:</strong><br><br>
+                • Tokenizes SQL statement into keywords and parameters<br>
+                • Validates BACKUP DATABASE syntax structure<br>
+                • Parses database name and destination path<br>
+                • Checks WITH options (COMPRESSION, CHECKSUM, etc.)<br><br>
+                <strong>Internal Process:</strong><br>
+                • Creates parse tree for the command<br>
+                • Validates all parameters and options<br>
+                • Prepares execution plan`,
+                duration: 1500,
+                logMessage: "Parsing BACKUP DATABASE command...",
+                technical: "SQL Parser creates Abstract Syntax Tree (AST) for the backup command"
+            },
+            {
+                title: "2. Security & Permission Check",
+                details: `<strong>Authentication & Authorization:</strong><br><br>
+                • Verifies user has BACKUP DATABASE permission<br>
+                • Checks if user owns database or has db_backupoperator role<br>
+                • Validates file system access permissions<br>
+                • Ensures backup destination is accessible<br><br>
+                <strong>Security Context:</strong><br>
+                • Runs under SQL Server service account<br>
+                • Validates Windows authentication if applicable<br>
+                • Checks database access permissions`,
+                duration: 1200,
+                logMessage: "Validating user permissions and security context...",
+                technical: "Security subsystem validates BACKUP DATABASE permissions and file access rights"
+            },
+            {
+                title: "3. Backup Engine Initialization",
+                details: `<strong>Backup Engine Startup:</strong><br><br>
+                • Initializes backup subsystem components<br>
+                • Allocates memory buffers for backup operations<br>
+                • Prepares backup file header structure<br>
+                • Sets up compression algorithms if specified<br><br>
+                <strong>Resource Allocation:</strong><br>
+                • Backup I/O buffers (default 1MB per buffer)<br>
+                • Compression workspace memory<br>
+                • Checksum calculation structures`,
+                duration: 1800,
+                logMessage: "Initializing backup engine and allocating resources...",
+                technical: "Backup engine allocates I/O buffers and initializes compression algorithms"
+            },
+            {
+                title: "4. Database Locking",
+                details: `<strong>Database Lock Acquisition:</strong><br><br>
+                • Takes shared database lock (allows reads, blocks exclusive operations)<br>
+                • Sets database in backup mode<br>
+                • Prevents database schema modifications<br>
+                • Allows concurrent SELECT operations<br><br>
+                <strong>Lock Manager Actions:</strong><br>
+                • Shared (S) lock on database level<br>
+                • Schema stability locks on tables<br>
+                • Maintains lock until backup completes`,
+                duration: 1000,
+                logMessage: "Acquiring database locks and setting backup mode...",
+                technical: "Lock Manager places shared locks preventing structural changes during backup"
+            },
+            {
+                title: "5. Data Page Reading",
+                details: `<strong>Sequential Page Reading:</strong><br><br>
+                • Reads ALL allocated data pages from .mdf files<br>
+                • Bypasses buffer pool for efficiency<br>
+                • Reads pages in allocation order (not logical order)<br>
+                • Includes both used and partially used pages<br><br>
+                <strong>I/O Operations:</strong><br>
+                • Direct disk reads (not from buffer cache)<br>
+                • Multiple concurrent read threads<br>
+                • Processes pages in 8KB chunks`,
+                duration: 3000,
+                logMessage: "Reading data pages from database files...",
+                technical: "Storage engine performs sequential reads of allocated pages using multiple I/O threads"
+            },
+            {
+                title: "6. Data Compression",
+                details: `<strong>Backup Compression Process:</strong><br><br>
+                • Compresses data pages using XPRESS algorithm<br>
+                • Reduces backup file size by 50-80%<br>
+                • Processes pages in parallel compression streams<br>
+                • Maintains page integrity during compression<br><br>
+                <strong>Compression Benefits:</strong><br>
+                • Faster backup (less I/O)<br>
+                • Smaller backup files<br>
+                • CPU intensive but I/O efficient`,
+                duration: 2500,
+                logMessage: "Compressing backup data using XPRESS algorithm...",
+                technical: "Compression engine processes data pages in parallel using XPRESS compression algorithm"
+            },
+            {
+                title: "7. File Writing",
+                details: `<strong>Backup File Creation:</strong><br><br>
+                • Writes compressed data to .bak file<br>
+                • Creates backup file header with metadata<br>
+                • Writes data in sequential blocks<br>
+                • Maintains backup file structure<br><br>
+                <strong>File Operations:</strong><br>
+                • Creates backup file with proper permissions<br>
+                • Writes backup header information<br>
+                • Sequential write operations to disk<br>
+                • Flushes data to ensure durability`,
+                duration: 2000,
+                logMessage: "Writing compressed data to backup file...",
+                technical: "File system writes backup data sequentially with proper header metadata"
+            },
+            {
+                title: "8. Backup Verification",
+                details: `<strong>Integrity Verification:</strong><br><br>
+                • Calculates and verifies checksums<br>
+                • Validates backup file structure<br>
+                • Ensures all pages written correctly<br>
+                • Confirms backup file completeness<br><br>
+                <strong>Verification Process:</strong><br>
+                • Page-level checksum validation<br>
+                • Backup file header verification<br>
+                • End-of-backup marker confirmation<br>
+                • Backup integrity validation`,
+                duration: 1200,
+                logMessage: "Verifying backup integrity and checksums...",
+                technical: "Verification engine validates page checksums and backup file integrity"
+            },
+            {
+                title: "9. Metadata Update",
+                details: `<strong>Backup History Update:</strong><br><br>
+                • Records backup information in msdb database<br>
+                • Updates backup history tables<br>
+                • Stores backup metadata and file locations<br>
+                • Updates database backup LSN information<br><br>
+                <strong>Tables Updated:</strong><br>
+                • backupset - backup operation details<br>
+                • backupmediaset - backup media information<br>
+                • backupfile - individual file details<br>
+                • Sets database last backup date`,
+                duration: 800,
+                logMessage: "Updating backup metadata and history tables...",
+                technical: "Metadata subsystem updates msdb backup history tables and database properties"
+            }
+        ];
+        
+        const commandExamples = {
+            full: `BACKUP DATABASE StudentDB 
+TO DISK = 'C:\\Backup\\StudentDB_Full.bak' 
+WITH COMPRESSION, CHECKSUM, INIT;`,
+            diff: `BACKUP DATABASE StudentDB 
+TO DISK = 'C:\\Backup\\StudentDB_Diff.bak' 
+WITH DIFFERENTIAL, COMPRESSION;`,
+            log: `BACKUP LOG StudentDB 
+TO DISK = 'C:\\Backup\\StudentDB_Log.trn' 
+WITH CHECKSUM;`,
+            restore: `RESTORE DATABASE StudentDB 
+FROM DISK = 'C:\\Backup\\StudentDB_Full.bak' 
+WITH REPLACE, STATS = 10;`
+        };
+        
+        function loadExample(type) {
+            if (isExecuting) return;
+            document.getElementById('sqlCommand').value = commandExamples[type];
+        }
+        
+        function executeBackup() {
+            if (isExecuting) return;
+            
+            const command = document.getElementById('sqlCommand').value.trim();
+            if (!command) {
+                alert('Please enter a SQL command first!');
+                return;
+            }
+            
+            resetExecution();
+            isExecuting = true;
+            isPaused = false;
+            currentStage = 0;
+            startTime = new Date();
+            
+            document.getElementById('executeBtn').disabled = true;
+            document.getElementById('executeBtn').textContent = '⏳ Executing...';
+            document.getElementById('pauseBtn').textContent = '⏸️ Pause';
+            
+            addLogEntry('Starting backup command execution...', 'success');
+            addLogEntry(`Command: ${command.split('\n')[0]}...`, 'success');
+            
+            executeNextStage();
+        }
+        
+        function simulateJob() {
+            if (isExecuting) return;
+            
+            addLogEntry('SQL Server Agent Job starting...', 'success');
+            addLogEntry('Job: Daily Database Backup', 'success');
+            addLogEntry('Step 1: Execute backup command', 'success');
+            
+            document.getElementById('sqlCommand').value = commandExamples.full;
+            setTimeout(() => executeBackup(), 1000);
+        }
+        
+        function simulateJobFailure() {
+            if (isExecuting) return;
+            
+            resetExecution();
+            addLogEntry('SQL Server Agent Job starting...', 'success');
+            addLogEntry('Job: Daily Database Backup', 'success');
+            addLogEntry('ERROR: Insufficient disk space for backup', 'error');
+            addLogEntry('Job failed with error code 3201', 'error');
+            
+            updateCurrentStep('❌ Job Execution Failed', 
+                'Backup job failed due to insufficient disk space. Check available space on backup destination drive.');
+        }
+        
+        function executeNextStage() {
+            if (isPaused || currentStage >= stages.length) {
+                if (currentStage >= stages.length) {
+                    completeExecution();
+                }
+                return;
+            }
+            
+            const stage = stages[currentStage];
+            const stageElement = document.getElementById(`stage${currentStage + 1}`);
+            
+            // Activate current stage
+            stageElement.classList.add('active', 'processing');
+            
+            // Update progress
+            const progress = ((currentStage + 1) / stages.length) * 100;
+            document.getElementById('progressBar').style.width = progress + '%';
+            
+            // Update current step details
+            updateCurrentStep(stage.title, stage.details);
+            
+            // Add log entry
+            addLogEntry(stage.logMessage, 'success');
+            
+            // Update timing info
+            const elapsed = new Date() - startTime;
+            document.getElementById('timingInfo').innerHTML = 
+                `⏱️ <strong>Execution Time:</strong> ${(elapsed / 1000).toFixed(1)}s - ${stage.title}`;
+            
+            // Update technical details
+            document.getElementById('technicalDetails').innerHTML = 
+                `<strong>🔧 Technical Details:</strong><br>${stage.technical}`;
+            
+            // Activate connection line
+            if (currentStage > 0) {
+                const connection = document.getElementById(`conn${currentStage}`);
+                if (connection) {
+                    connection.classList.add('active');
+                }
+            }
+            
+            currentStage++;
+            
+            executionTimeout = setTimeout(() => {
+                // Remove processing animation
+                stageElement.classList.remove('processing');
+                stageElement.classList.add('completed');
+                
+                // Continue to next stage
+                executeNextStage();
+            }, stage.duration);
+        }
+        
+        function completeExecution() {
+            isExecuting = false;
+            document.getElementById('executeBtn').disabled = false;
+            document.getElementById('executeBtn').textContent = '▶️ Execute Command';
+            document.getElementById('pauseBtn').textContent = '⏸️ Pause';
+            
+            const totalElapsed = new Date() - startTime;
+            
+            addLogEntry('Backup command executed successfully!', 'success');
+            addLogEntry(`Total execution time: ${(totalElapsed / 1000).toFixed(1)}s`, 'success');
+            addLogEntry('Backup file created and verified.', 'success');
+            
+            updateCurrentStep('✅ Execution Complete!', 
+                `Backup operation completed successfully in ${(totalElapsed / 1000).toFixed(1)} seconds. 
+                The database backup has been created, compressed, verified, and all metadata has been updated.`);
+            
+            document.getElementById('timingInfo').innerHTML = 
+                `⏱️ <strong>Total Execution Time:</strong> ${(totalElapsed / 1000).toFixed(1)}s - Completed Successfully`;
+            
+            document.getElementById('technicalDetails').innerHTML = 
+                `<strong>🎉 Backup Complete!</strong><br>
+                All 9 stages of the backup process have been completed successfully. 
+                The backup file is ready for use in disaster recovery scenarios.`;
+        }
+        
+        function pauseExecution() {
+            if (!isExecuting) return;
+            
+            if (isPaused) {
+                // Resume execution
+                isPaused = false;
+                document.getElementById('pauseBtn').textContent = '⏸️ Pause';
+                addLogEntry('Resuming backup execution...', 'warning');
+                executeNextStage();
+            } else {
+                // Pause execution
+                isPaused = true;
+                document.getElementById('pauseBtn').textContent = '▶️ Resume';
+                addLogEntry('Backup execution paused...', 'warning');
+                if (executionTimeout) {
+                    clearTimeout(executionTimeout);
+                    executionTimeout = null;
+                }
+            }
+        }
+        
+        function resetExecution() {
+            // Clear any running timeout
+            if (executionTimeout) {
+                clearTimeout(executionTimeout);
+                executionTimeout = null;
+            }
+            
+            // Reset state
+            isExecuting = false;
+            isPaused = false;
+            currentStage = 0;
+            startTime = null;
+            
+            // Reset UI elements
+            document.getElementById('executeBtn').disabled = false;
+            document.getElementById('executeBtn').textContent = '▶️ Execute Command';
+            document.getElementById('pauseBtn').textContent = '⏸️ Pause';
+            document.getElementById('progressBar').style.width = '0%';
+            
+            // Reset all stages
+            for (let i = 1; i <= 9; i++) {
+                const stage = document.getElementById(`stage${i}`);
+                stage.classList.remove('active', 'processing', 'completed');
+            }
+            
+            // Reset all connections
+            for (let i = 1; i <= 8; i++) {
+                const connection = document.getElementById(`conn${i}`);
+                if (connection) {
+                    connection.classList.remove('active');
+                }
+            }
+            
+            // Reset details panel
+            updateCurrentStep('Ready to Execute', 
+                'Click "Execute Command" or "Run Scheduled Job" to see the internal execution flow. Watch as SQL Server processes your backup command step by step.');
+            
+            document.getElementById('timingInfo').innerHTML = 
+                '⏱️ <strong>Execution Time:</strong> Not started';
+            
+            document.getElementById('technicalDetails').innerHTML = 
+                `<strong>💡 What You'll Learn:</strong><br>
+                • Command parsing and validation<br>
+                • Security and permission checks<br>
+                • Database locking mechanisms<br>
+                • Page reading and compression<br>
+                • File I/O operations<br>
+                • Backup verification process<br>
+                • Metadata and history updates`;
+            
+            // Clear log except first entry
+            const logContainer = document.getElementById('executionLog');
+            logContainer.innerHTML = '<div class="log-entry">System ready for backup execution...</div>';
+        }
+        
+        function updateCurrentStep(title, details) {
+            document.getElementById('currentStep').innerHTML = `
+                <div class="step-title">${title}</div>
+                <div class="step-details">${details}</div>
+            `;
+        }
+        
+        function addLogEntry(message, type = 'success') {
+            const logContainer = document.getElementById('executionLog');
+            const timestamp = new Date().toLocaleTimeString();
+            const logEntry = document.createElement('div');
+            logEntry.className = `log-entry ${type}`;
+            logEntry.textContent = `[${timestamp}] ${message}`;
+            logContainer.appendChild(logEntry);
+            
+            // Scroll to bottom
+            logContainer.scrollTop = logContainer.scrollHeight;
+            
+            // Keep only last 50 entries
+            const entries = logContainer.children;
+            if (entries.length > 50) {
+                logContainer.removeChild(entries[0]);
+            }
+        }
+        
+        function showHelp() {
+            alert(`SQL Server Backup Execution Flow Help:
+
+🎯 PURPOSE:
+This visualization shows the internal steps SQL Server takes when executing a BACKUP DATABASE command.
+
+🎮 CONTROLS:
+• Execute Command: Run the SQL command in the text area
+• Pause/Resume: Pause or resume the animation
+• Reset: Reset the animation to start over
+• Quick Examples: Load common backup commands
+
+🔍 WHAT YOU'LL SEE:
+1. Command Parser - SQL syntax validation
+2. Security Check - Permission validation
+3. Backup Engine - Initialize backup subsystem
+4. Database Lock - Acquire necessary locks
+5. Page Reader - Read data pages from disk
+6. Compression - Compress backup data
+7. File Writer - Write to backup file
+8. Verification - Verify backup integrity
+9. Metadata Update - Update backup history
+
+💡 EDUCATIONAL VALUE:
+Understanding these internal processes helps with:
+• Troubleshooting backup issues
+• Optimizing backup performance
+• Planning backup strategies
+• Database administration skills
+
+Click any example button to try different backup scenarios!`);
+        }
+        
+        // Initialize the application
+        document.addEventListener('DOMContentLoaded', function() {
+            // Add some initial styling effects
+            setTimeout(() => {
+                document.body.style.opacity = '1';
+            }, 100);
+            
+            // Set up event listeners
+            setupEventListeners();
+        });
+        
+        function setupEventListeners() {
+            // Execute button
+            document.getElementById('executeBtn').addEventListener('click', executeBackup);
+            
+            // Job buttons
+            document.getElementById('simulateJobBtn').addEventListener('click', simulateJob);
+            document.getElementById('simulateJobFailureBtn').addEventListener('click', simulateJobFailure);
+            
+            // Control buttons
+            document.getElementById('pauseBtn').addEventListener('click', pauseExecution);
+            document.getElementById('resetBtn').addEventListener('click', resetExecution);
+            document.getElementById('helpBtn').addEventListener('click', showHelp);
+            
+            // Example buttons
+            const exampleBtns = document.querySelectorAll('.example-btn');
+            exampleBtns.forEach(btn => {
+                btn.addEventListener('click', function() {
+                    const example = this.getAttribute('data-example');
+                    loadExample(example);
+                });
+            });
+        }
+        
+        // Keyboard shortcuts
+        document.addEventListener('keydown', function(e) {
+            if (e.ctrlKey && e.key === 'Enter') {
+                e.preventDefault();
+                executeBackup();
+            } else if (e.key === ' ' && isExecuting) {
+                e.preventDefault();
+                pauseExecution();
+            } else if (e.key === 'Escape') {
+                e.preventDefault();
+                resetExecution();
+            }
+        });
+    </script>
+</body>
+</html>
