@@ -1,0 +1,763 @@
+    
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Log Shipping - Interactive Presentation</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            color: white;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .header p {
+            font-size: 1.2em;
+            opacity: 0.9;
+        }
+
+        .presentation-area {
+            background: white;
+            border-radius: 15px;
+            padding: 30px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-bottom: 30px;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 25px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-weight: 600;
+        }
+
+        .play-btn {
+            background: #4CAF50;
+            color: white;
+        }
+
+        .pause-btn {
+            background: #ff9800;
+            color: white;
+        }
+
+        .reset-btn {
+            background: #2196F3;
+            color: white;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .diagram {
+            position: relative;
+            width: 100%;
+            height: 500px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            border: 2px solid #e9ecef;
+            overflow: hidden;
+        }
+
+        .server {
+            position: absolute;
+            width: 140px;
+            height: 100px;
+            background: linear-gradient(145deg, #ffffff, #f0f0f0);
+            border-radius: 15px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-weight: bold;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+            border: 3px solid;
+        }
+
+        .server::before {
+            content: "🖥️";
+            font-size: 24px;
+            margin-bottom: 5px;
+        }
+
+        .primary-server {
+            top: 100px;
+            left: 100px;
+            border-color: #007bff;
+            background: linear-gradient(145deg, #e3f2fd, #bbdefb);
+        }
+
+        .secondary-server {
+            top: 100px;
+            right: 100px;
+            border-color: #6c757d;
+            background: linear-gradient(145deg, #f5f5f5, #e0e0e0);
+        }
+
+        .monitor-server {
+            bottom: 50px;
+            left: 50%;
+            transform: translateX(-50%);
+            border-color: #28a745;
+            background: linear-gradient(145deg, #e8f5e8, #c8e6c9);
+        }
+
+        .monitor-server::before {
+            content: "📊";
+        }
+
+        .log-file {
+            position: absolute;
+            width: 70px;
+            height: 45px;
+            background: linear-gradient(145deg, #fff3cd, #ffeaa7);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #333;
+            font-size: 11px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.15);
+            opacity: 0;
+            transition: all 0.5s ease;
+            border: 2px solid #ffc107;
+        }
+
+        .log-file::before {
+            content: "📄";
+            position: absolute;
+            top: -2px;
+            left: 2px;
+            font-size: 14px;
+        }
+
+        .backup-file {
+            background: linear-gradient(145deg, #d1ecf1, #b8daff);
+            border-color: #17a2b8;
+            color: #0c5460;
+        }
+
+        .backup-file::before {
+            content: "💾";
+        }
+
+        .connection-line {
+            position: absolute;
+            height: 4px;
+            background: linear-gradient(90deg, #dc3545, #ff6b7a);
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            border-radius: 2px;
+        }
+
+        .line1 {
+            top: 150px;
+            left: 240px;
+            width: 320px;
+        }
+
+        .line2 {
+            bottom: 100px;
+            left: 190px;
+            width: 250px;
+        }
+
+        .line3 {
+            bottom: 100px;
+            right: 190px;
+            width: 250px;
+        }
+
+        .arrow {
+            position: absolute;
+            width: 0;
+            height: 0;
+            border-left: 10px solid transparent;
+            border-right: 10px solid transparent;
+            border-bottom: 15px solid #dc3545;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+        }
+
+        .arrow-right {
+            border-left: 15px solid #dc3545;
+            border-right: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        .arrow-left {
+            border-right: 15px solid #dc3545;
+            border-left: 0;
+            border-top: 8px solid transparent;
+            border-bottom: 8px solid transparent;
+        }
+
+        .arrow1 {
+            top: 142px;
+            left: 555px;
+        }
+
+        .arrow2 {
+            bottom: 92px;
+            left: 435px;
+        }
+
+        .arrow3 {
+            bottom: 92px;
+            right: 185px;
+        }
+
+        .job-status {
+            position: absolute;
+            background: rgba(0,0,0,0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+            opacity: 0;
+            transition: opacity 0.5s ease;
+            z-index: 10;
+        }
+
+        .job-status.active {
+            opacity: 1;
+            animation: statusPulse 2s infinite;
+        }
+
+        @keyframes statusPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .status1 {
+            top: 190px;
+            left: 90px;
+        }
+
+        .status2 {
+            top: 230px;
+            left: 320px;
+        }
+
+        .status3 {
+            top: 190px;
+            right: 90px;
+        }
+
+        .step-description {
+            background: #e9ecef;
+            padding: 20px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border-left: 5px solid #007bff;
+        }
+
+        .step-description h3 {
+            color: #007bff;
+            margin-bottom: 10px;
+        }
+
+        .job-indicator {
+            position: absolute;
+            width: 80px;
+            height: 30px;
+            background: linear-gradient(145deg, #28a745, #20c997);
+            border-radius: 15px;
+            opacity: 0;
+            animation: pulse 2s infinite;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            box-shadow: 0 4px 8px rgba(40, 167, 69, 0.3);
+            border: 2px solid #1e7e34;
+        }
+
+        .backup-job {
+            background: linear-gradient(145deg, #007bff, #0056b3);
+            border-color: #004085;
+        }
+
+        .copy-job {
+            background: linear-gradient(145deg, #ffc107, #e0a800);
+            border-color: #d39e00;
+            color: #333;
+        }
+
+        .restore-job {
+            background: linear-gradient(145deg, #17a2b8, #138496);
+            border-color: #0c5460;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.7; }
+            50% { transform: scale(1.2); opacity: 1; }
+            100% { transform: scale(1); opacity: 0.7; }
+        }
+
+        .moving-element {
+            animation: moveElement 3s linear forwards;
+        }
+
+        @keyframes moveElement {
+            0% { transform: translateX(0) translateY(0); }
+            100% { transform: translateX(var(--end-x)) translateY(var(--end-y)); }
+        }
+
+        .fade-in {
+            opacity: 1 !important;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            padding: 15px;
+            background: #f8f9fa;
+            border-radius: 10px;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>Log Shipping Process</h1>
+            <p>Interactive visualization of how SQL Server Log Shipping works</p>
+        </div>
+
+        <div class="presentation-area">
+            <div class="controls">
+                <button class="play-btn" id="playBtn">▶ Start Animation</button>
+                <button class="pause-btn" id="pauseBtn" disabled>⏸ Pause</button>
+                <button class="reset-btn" id="resetBtn">🔄 Reset</button>
+            </div>
+
+            <div class="diagram" id="diagram">
+                <!-- Servers -->
+                <div class="server primary-server">
+                    <div>Primary<br>Server</div>
+                </div>
+                <div class="server secondary-server">
+                    <div>Secondary<br>Server</div>
+                </div>
+
+                <!-- Connection Line -->
+                <div class="connection-line line1" id="line1"></div>
+
+                <!-- Arrow -->
+                <div class="arrow arrow-right arrow1" id="arrow1"></div>
+
+                <!-- Job Indicators -->
+                <div class="job-indicator backup-job" id="backupJob" style="top: 210px; left: 120px;" title="Backup Job">BACKUP JOB</div>
+                <div class="job-indicator copy-job" id="copyJob" style="top: 250px; left: 350px;" title="Copy Job">COPY JOB</div>
+                <div class="job-indicator restore-job" id="restoreJob" style="top: 210px; right: 120px;" title="Restore Job">RESTORE JOB</div>
+
+                <!-- Job Status Indicators -->
+                <div class="job-status status1" id="status1" style="top: 240px; left: 140px;">🔄 Creating Backup...</div>
+                <div class="job-status status2" id="status2" style="top: 280px; left: 370px;">📤 Copying Files...</div>
+                <div class="job-status status3" id="status3" style="top: 240px; right: 140px;">🔄 Restoring Logs...</div>
+
+                <!-- Progress Indicator -->
+                <div class="progress-indicator" id="progressIndicator">Step 1/5</div>
+
+                <!-- Log Files (will be created dynamically) -->
+            </div>
+
+            <div class="step-description" id="stepDescription">
+                <h3>Step 1: Transaction Log Backup</h3>
+                <p>The primary server creates transaction log backups at regular intervals. This is the first step in the log shipping process.</p>
+            </div>
+
+            <div class="legend">
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #007bff;"></div>
+                    <span>Primary Server</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #6c757d;"></div>
+                    <span>Secondary Server</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #ffc107;"></div>
+                    <span>Log Files</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-color" style="background: #17a2b8;"></div>
+                    <span>Backup Files</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LogShippingAnimation {
+            constructor() {
+                this.currentStep = 0;
+                this.isPlaying = false;
+                this.isPaused = false;
+                this.animationTimeout = null;
+                this.steps = [
+                    {
+                        title: "Step 1: Transaction Log Backup Job",
+                        description: "The backup job on the primary server creates transaction log backups at scheduled intervals.",
+                        duration: 3000
+                    },
+                    {
+                        title: "Step 2: Copy Job Transfers Files", 
+                        description: "The copy job transfers the backup files from the primary server to the secondary server.",
+                        duration: 4000
+                    },
+                    {
+                        title: "Step 3: Restore Job Applies Logs",
+                        description: "The restore job on the secondary server applies the transaction log backups to maintain synchronization.",
+                        duration: 3000
+                    },
+                    {
+                        title: "Step 4: Continuous Process",
+                        description: "This process repeats continuously to maintain data synchronization between primary and secondary servers.",
+                        duration: 2000
+                    }
+                ];
+
+                this.initializeEventListeners();
+            }
+
+            initializeEventListeners() {
+                document.getElementById('playBtn').addEventListener('click', () => this.startAnimation());
+                document.getElementById('pauseBtn').addEventListener('click', () => this.pauseAnimation());
+                document.getElementById('resetBtn').addEventListener('click', () => this.resetAnimation());
+            }
+
+            startAnimation() {
+                if (this.isPaused) {
+                    this.isPaused = false;
+                    this.updateControls();
+                    this.continueAnimation();
+                } else {
+                    this.isPlaying = true;
+                    this.currentStep = 0;
+                    this.updateControls();
+                    this.runStep();
+                }
+            }
+
+            pauseAnimation() {
+                this.isPaused = true;
+                this.isPlaying = false;
+                if (this.animationTimeout) {
+                    clearTimeout(this.animationTimeout);
+                }
+                this.updateControls();
+            }
+
+            resetAnimation() {
+                this.isPlaying = false;
+                this.isPaused = false;
+                this.currentStep = 0;
+                if (this.animationTimeout) {
+                    clearTimeout(this.animationTimeout);
+                }
+                this.clearDiagram();
+                this.updateControls();
+                this.updateStepDescription();
+                this.updateProgressIndicator();
+            }
+
+            updateControls() {
+                const playBtn = document.getElementById('playBtn');
+                const pauseBtn = document.getElementById('pauseBtn');
+                
+                playBtn.disabled = this.isPlaying && !this.isPaused;
+                pauseBtn.disabled = !this.isPlaying || this.isPaused;
+                
+                playBtn.textContent = this.isPaused ? '▶ Resume' : '▶ Start Animation';
+            }
+
+            continueAnimation() {
+                if (!this.isPaused) {
+                    this.runStep();
+                }
+            }
+
+            runStep() {
+                if (this.currentStep >= this.steps.length) {
+                    this.resetAnimation();
+                    return;
+                }
+
+                this.updateStepDescription();
+                this.updateProgressIndicator();
+                this.executeStepAnimation();
+
+                this.animationTimeout = setTimeout(() => {
+                    if (!this.isPaused) {
+                        this.currentStep++;
+                        this.runStep();
+                    }
+                }, this.steps[this.currentStep].duration);
+            }
+
+            executeStepAnimation() {
+                switch (this.currentStep) {
+                    case 0:
+                        this.animateBackupJob();
+                        break;
+                    case 1:
+                        this.animateCopyJob();
+                        break;
+                    case 2:
+                        this.animateRestoreJob();
+                        break;
+                    case 3:
+                        this.animateContinuousProcess();
+                        break;
+                }
+            }
+
+            animateBackupJob() {
+                const backupJob = document.getElementById('backupJob');
+                const status1 = document.getElementById('status1');
+                
+                backupJob.style.opacity = '1';
+                status1.classList.add('active');
+
+                setTimeout(() => {
+                    this.createLogFile(150, 200, 'LOG');
+                }, 1000);
+
+                setTimeout(() => {
+                    this.createLogFile(170, 220, 'BAK', 'backup-file');
+                    status1.textContent = '✅ Backup Complete';
+                }, 2000);
+
+                setTimeout(() => {
+                    status1.classList.remove('active');
+                }, 2800);
+            }
+
+            animateCopyJob() {
+                const copyJob = document.getElementById('copyJob');
+                const line1 = document.getElementById('line1');
+                const arrow1 = document.getElementById('arrow1');
+                const status2 = document.getElementById('status2');
+                
+                line1.classList.add('fade-in');
+                arrow1.classList.add('fade-in');
+                copyJob.style.opacity = '1';
+                status2.classList.add('active');
+
+                setTimeout(() => {
+                    this.moveFileAcross(170, 220, 580, 220, 'BAK', 'backup-file');
+                }, 1000);
+
+                setTimeout(() => {
+                    status2.textContent = '✅ Copy Complete';
+                }, 3000);
+
+                setTimeout(() => {
+                    status2.classList.remove('active');
+                }, 3800);
+            }
+
+            animateRestoreJob() {
+                const restoreJob = document.getElementById('restoreJob');
+                const status3 = document.getElementById('status3');
+                
+                restoreJob.style.opacity = '1';
+                status3.classList.add('active');
+
+                setTimeout(() => {
+                    this.createLogFile(920, 200, 'REST', 'backup-file');
+                    status3.textContent = '✅ Restore Complete';
+                }, 1500);
+
+                setTimeout(() => {
+                    status3.classList.remove('active');
+                }, 2800);
+            }
+
+
+
+            animateContinuousProcess() {
+                this.pulseAllJobs();
+                
+                setTimeout(() => {
+                    this.createMultipleFiles();
+                }, 1000);
+            }
+
+            createLogFile(x, y, text, className = '') {
+                const logFile = document.createElement('div');
+                logFile.className = `log-file ${className}`;
+                logFile.style.left = x + 'px';
+                logFile.style.top = y + 'px';
+                logFile.textContent = text;
+                logFile.style.opacity = '0';
+
+                document.getElementById('diagram').appendChild(logFile);
+
+                setTimeout(() => {
+                    logFile.style.opacity = '1';
+                }, 100);
+
+                return logFile;
+            }
+
+            moveFileAcross(startX, startY, endX, endY, text, className = '') {
+                const file = this.createLogFile(startX, startY, text, className);
+                
+                setTimeout(() => {
+                    file.style.transform = `translate(${endX - startX}px, ${endY - startY}px)`;
+                    file.style.transition = 'transform 2s ease-in-out';
+                }, 500);
+            }
+
+            pulseAllServers() {
+                const servers = document.querySelectorAll('.server');
+                servers.forEach(server => {
+                    server.style.animation = 'pulse 1s ease-in-out 3';
+                });
+            }
+
+            pulseAllJobs() {
+                const jobs = document.querySelectorAll('.job-indicator');
+                jobs.forEach(job => {
+                    job.style.opacity = '1';
+                });
+            }
+
+            createMultipleFiles() {
+                const positions = [
+                    {x: 130, y: 280, text: 'LOG1'},
+                    {x: 330, y: 300, text: 'BAK1', class: 'backup-file'},
+                    {x: 900, y: 280, text: 'REST1', class: 'backup-file'}
+                ];
+
+                positions.forEach((pos, index) => {
+                    setTimeout(() => {
+                        this.createLogFile(pos.x, pos.y, pos.text, pos.class || '');
+                    }, index * 300);
+                });
+            }
+
+            clearDiagram() {
+                const logFiles = document.querySelectorAll('.log-file');
+                logFiles.forEach(file => file.remove());
+
+                const lines = document.querySelectorAll('.connection-line');
+                lines.forEach(line => line.classList.remove('fade-in'));
+
+                const arrows = document.querySelectorAll('.arrow');
+                arrows.forEach(arrow => arrow.classList.remove('fade-in'));
+
+                const jobs = document.querySelectorAll('.job-indicator');
+                jobs.forEach(job => {
+                    job.style.opacity = '0';
+                    job.style.animation = 'pulse 2s infinite';
+                });
+
+                const statuses = document.querySelectorAll('.job-status');
+                statuses.forEach(status => {
+                    status.classList.remove('active');
+                    if (status.id === 'status1') status.textContent = '🔄 Creating Backup...';
+                    else if (status.id === 'status2') status.textContent = '📤 Copying Files...';
+                    else if (status.id === 'status3') status.textContent = '🔄 Restoring Logs...';
+                });
+
+                const servers = document.querySelectorAll('.server');
+                servers.forEach(server => {
+                    server.style.animation = '';
+                });
+            }
+
+            updateStepDescription() {
+                const stepDesc = document.getElementById('stepDescription');
+                if (this.currentStep < this.steps.length) {
+                    const step = this.steps[this.currentStep];
+                    stepDesc.innerHTML = `
+                        <h3>${step.title}</h3>
+                        <p>${step.description}</p>
+                    `;
+                } else {
+                    stepDesc.innerHTML = `
+                        <h3>Animation Complete</h3>
+                        <p>The log shipping process demonstration is complete. Click Reset to start over.</p>
+                    `;
+                }
+            }
+
+            updateProgressIndicator() {
+                const indicator = document.getElementById('progressIndicator');
+                const current = Math.min(this.currentStep + 1, this.steps.length);
+                indicator.textContent = `Step ${current}/${this.steps.length}`;
+            }
+        }
+
+        // Initialize the animation when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new LogShippingAnimation();
+        });
+    </script>
+</body>
+</html>
