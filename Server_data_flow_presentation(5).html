@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL Server Log Shipping Architecture</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #2c3e50 0%, #3498db 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            color: white;
+        }
+
+        .header {
+            text-align: center;
+            padding: 20px;
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        .header p {
+            font-size: 1.2rem;
+            opacity: 0.9;
+        }
+
+        .presentation-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+            position: relative;
+        }
+
+        .server-diagram {
+            width: 95%;
+            max-width: 1400px;
+            height: 650px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 40px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.3);
+        }
+
+        .backup-folder {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .folder-icon {
+            width: 100px;
+            height: 80px;
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+            border-radius: 10px 10px 5px 5px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 2.5rem;
+            color: white;
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.3);
+            margin-bottom: 10px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            transition: transform 0.3s ease;
+        }
+
+        .folder-icon::before {
+            content: '';
+            position: absolute;
+            top: -8px;
+            left: 10px;
+            width: 30px;
+            height: 8px;
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+            border-radius: 4px 4px 0 0;
+        }
+
+        .folder-info {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 10px;
+            border-radius: 8px;
+            backdrop-filter: blur(5px);
+            min-width: 180px;
+            font-size: 0.9rem;
+        }
+
+        .folder-name {
+            font-size: 1rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #f39c12;
+        }
+
+        .folder-path {
+            font-size: 0.8rem;
+            opacity: 0.8;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 5px;
+        }
+
+        .file-count {
+            font-size: 0.8rem;
+            opacity: 0.9;
+            color: #3498db;
+        }
+
+        .backup-files {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 5;
+        }
+
+        .backup-file {
+            width: 15px;
+            height: 3px;
+            background: #3498db;
+            border-radius: 1px;
+            opacity: 0;
+            animation: fadeInFile 0.5s ease forwards;
+        }
+
+        @keyframes fadeInFile {
+            to { opacity: 1; }
+        }
+
+        .server {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: relative;
+            z-index: 10;
+        }
+
+        .server-icon {
+            width: 120px;
+            height: 120px;
+            background: linear-gradient(145deg, #e67e22, #d35400);
+            border-radius: 15px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 3rem;
+            color: white;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+            margin-bottom: 15px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            transition: transform 0.3s ease;
+        }
+
+        .primary .server-icon {
+            background: linear-gradient(145deg, #27ae60, #229954);
+            font-size: 4rem;
+            width: 140px;
+            height: 140px;
+        }
+
+        .secondary .server-icon {
+            background: linear-gradient(145deg, #8e44ad, #7d3c98);
+        }
+
+        .server-info {
+            text-align: center;
+            background: rgba(0, 0, 0, 0.4);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            min-width: 220px;
+        }
+
+        .server-name {
+            font-size: 1.3rem;
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .server-location {
+            font-size: 1rem;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .server-role {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-bottom: 8px;
+            color: #f39c12;
+        }
+
+        .server-ip {
+            font-size: 0.85rem;
+            opacity: 0.7;
+            font-family: 'Courier New', monospace;
+        }
+
+        .log-packet {
+            width: 25px;
+            height: 25px;
+            border-radius: 8px;
+            position: absolute;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+        }
+
+        .log-backup {
+            background: linear-gradient(145deg, #3498db, #2980b9);
+            box-shadow: 0 0 15px #3498db, 0 0 30px #3498db;
+        }
+
+        .log-copy {
+            background: linear-gradient(145deg, #f39c12, #e67e22);
+            box-shadow: 0 0 15px #f39c12, 0 0 30px #f39c12;
+        }
+
+        .log-restore {
+            background: linear-gradient(145deg, #27ae60, #229954);
+            box-shadow: 0 0 15px #27ae60, 0 0 30px #27ae60;
+        }
+
+        .data-line {
+            position: absolute;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            transform-origin: left center;
+            border-radius: 2px;
+        }
+
+        .controls {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            padding: 20px;
+            border-radius: 15px;
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+        }
+
+        .control-btn {
+            background: linear-gradient(145deg, #e74c3c, #c0392b);
+            border: none;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .speed-control {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .speed-slider {
+            width: 150px;
+            height: 5px;
+            border-radius: 5px;
+            background: rgba(255, 255, 255, 0.3);
+            outline: none;
+            appearance: none;
+        }
+
+        .speed-slider::-webkit-slider-thumb {
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #e74c3c;
+            cursor: pointer;
+            box-shadow: 0 0 10px #e74c3c;
+        }
+
+        .speed-label {
+            font-size: 0.9rem;
+            min-width: 80px;
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: #27ae60;
+            animation: pulse 2s infinite;
+        }
+
+        .paused .status-dot {
+            background: #e74c3c;
+            animation: none;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.2); opacity: 0.8; }
+        }
+
+        .secondary-servers {
+            display: flex;
+            flex-direction: column;
+            gap: 100px;
+        }
+
+        .log-shipping-stats {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            font-size: 0.9rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            gap: 20px;
+        }
+
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(0, 0, 0, 0.6);
+            padding: 15px;
+            border-radius: 10px;
+            backdrop-filter: blur(5px);
+            font-size: 0.85rem;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 4px;
+        }
+
+        .process-indicator {
+            position: absolute;
+            top: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2c3e50;
+            padding: 12px 20px;
+            border-radius: 8px;
+            font-size: 1.1rem;
+            font-weight: bold;
+            font-family: 'Arial', sans-serif;
+            opacity: 0;
+            transition: opacity 0.4s ease;
+            border: 2px solid #3498db;
+            color: #ffffff;
+            text-shadow: none;
+            z-index: 50;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+            backdrop-filter: none;
+            filter: none;
+            -webkit-filter: none;
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        .process-indicator.show {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🗄️ SQL Server Log Shipping Architecture</h1>
+        <p>Transaction Log Backup → Copy → Restore Process Flow</p>
+    </div>
+
+    <div class="presentation-container">
+        <div class="log-shipping-stats">
+            <div class="stat-item">
+                <span>Log Backups:</span>
+                <span id="logBackups">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Files Copied:</span>
+                <span id="filesCopied">0</span>
+            </div>
+            <div class="stat-item">
+                <span>Restores Applied:</span>
+                <span id="restoresApplied">0</span>
+            </div>
+            <div class="stat-item">
+                <span>RTO Status:</span>
+                <span id="rtoStatus" style="color: #27ae60;">Healthy</span>
+            </div>
+            <div class="stat-item">
+                <span>Last Restore:</span>
+                <span id="lastRestore">--:--:--</span>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(145deg, #3498db, #2980b9);"></div>
+                <span>📁 Log Backup (.trn)</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(145deg, #f39c12, #e67e22);"></div>
+                <span>📋 Copy Job</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color" style="background: linear-gradient(145deg, #27ae60, #229954);"></div>
+                <span>🔄 Restore Job</span>
+            </div>
+        </div>
+
+        <div class="process-indicator" id="processIndicator">
+            Processing...
+        </div>
+
+        <div class="server-diagram">
+            <!-- Primary Server -->
+            <div class="server primary">
+                <div class="server-icon">🗄️</div>
+                <div class="server-info">
+                    <div class="server-name">SQL-PROD-01</div>
+                    <div class="server-location">Production Server</div>
+                    <div class="server-role">Primary Database</div>
+                    <div class="server-ip">172.16.1.10</div>
+                </div>
+            </div>
+
+            <!-- Backup Folder (Center) -->
+            <div class="backup-folder">
+                <div class="folder-icon">
+                    📂
+                    <div class="backup-files" id="backupFiles"></div>
+                </div>
+                <div class="folder-info">
+                    <div class="folder-name">Log Backup Folder</div>
+                    <div class="folder-path">D:\LogBackups\</div>
+                    <div class="file-count" id="fileCount">Files: 0</div>
+                </div>
+            </div>
+
+            <!-- Data Flow Lines - will be dynamically positioned -->
+            <div class="data-line" id="line1"></div>
+            <div class="data-line" id="line2"></div>
+            <div class="data-line" id="line3"></div>
+            <div class="data-line" id="line4"></div>
+
+            <!-- Secondary Servers -->
+            <div class="secondary-servers">
+                <div class="server secondary">
+                    <div class="server-icon">🗄️</div>
+                    <div class="server-info">
+                        <div class="server-name">SQL-DR-MUM</div>
+                        <div class="server-location">Mumbai DR Site</div>
+                        <div class="server-role">Secondary (Standby)</div>
+                        <div class="server-ip">192.168.10.15</div>
+                    </div>
+                </div>
+
+                <div class="server secondary">
+                    <div class="server-icon">🗄️</div>
+                    <div class="server-info">
+                        <div class="server-name">SQL-DR-DEL</div>
+                        <div class="server-location">Delhi DR Site</div>
+                        <div class="server-role">Secondary (Standby)</div>
+                        <div class="server-ip">192.168.20.25</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="controls">
+        <button class="control-btn" id="playPauseBtn" onclick="toggleAnimation()">▶️ Start Log Shipping</button>
+        <button class="control-btn" onclick="resetAnimation()">🔄 Reset</button>
+        
+        <div class="speed-control">
+            <span class="speed-label">Speed:</span>
+            <input type="range" class="speed-slider" id="speedSlider" min="0.1" max="3" step="0.1" value="1" oninput="updateSpeed()">
+            <span class="speed-label" id="speedValue">1.0x</span>
+        </div>
+
+        <div class="status-indicator" id="statusIndicator">
+            <div class="status-dot"></div>
+            <span id="statusText">Stopped</span>
+        </div>
+    </div>
+
+    <script>
+        let isAnimating = false;
+        let animationSpeed = 1;
+        let animationId;
+        let logBackupCount = 0;
+        let filesCopiedCount = 0;
+        let restoresAppliedCount = 0;
+        let sequenceNumber = 1000;
+
+        function showProcessIndicator(text) {
+            const indicator = document.getElementById('processIndicator');
+            indicator.innerHTML = text;
+            indicator.style.filter = 'none';
+            indicator.style.webkitFilter = 'none';
+            indicator.classList.add('show');
+            setTimeout(() => {
+                indicator.classList.remove('show');
+            }, 2000);
+        }
+
+        function createLogPacket(startX, startY, endX, endY, type, delay = 0) {
+            setTimeout(() => {
+                const packet = document.createElement('div');
+                packet.className = `log-packet ${type}`;
+                
+                // Add appropriate icon and text based on type
+                if (type === 'log-backup') {
+                    packet.innerHTML = '📁';
+                    packet.title = `Log Backup: DB_${sequenceNumber}.trn`;
+                } else if (type === 'log-copy') {
+                    packet.innerHTML = '📋';
+                    packet.title = 'Copy Job: Transferring log file';
+                } else if (type === 'log-restore') {
+                    packet.innerHTML = '🔄';
+                    packet.title = 'Restore Job: Applying log';
+                }
+                
+                packet.style.left = startX + 'px';
+                packet.style.top = startY + 'px';
+                
+                const diagram = document.querySelector('.server-diagram');
+                diagram.appendChild(packet);
+                
+                const distance = Math.sqrt(Math.pow(endX - startX, 2) + Math.pow(endY - startY, 2));
+                const duration = (distance / 80) / animationSpeed;
+                
+                packet.animate([
+                    { left: startX + 'px', top: startY + 'px', transform: 'scale(0.8)' },
+                    { left: endX + 'px', top: endY + 'px', transform: 'scale(1)' }
+                ], {
+                    duration: duration * 1000,
+                    easing: 'ease-out'
+                }).onfinish = () => {
+                    packet.remove();
+                    updateCounters(type);
+                };
+            }, delay);
+        }
+
+        let storedLogFiles = [];
+
+        function addLogFileToFolder() {
+            const backupFiles = document.getElementById('backupFiles');
+            const fileCount = document.getElementById('fileCount');
+            
+            const newFile = document.createElement('div');
+            newFile.className = 'backup-file';
+            newFile.style.animationDelay = Math.random() * 0.3 + 's';
+            backupFiles.appendChild(newFile);
+            
+            // Store file reference
+            storedLogFiles.push(newFile);
+            
+            // Update file count
+            fileCount.textContent = `Files: ${storedLogFiles.length}`;
+            
+            // Remove old files if too many (keep last 10)
+            if (storedLogFiles.length > 10) {
+                const oldFile = storedLogFiles.shift();
+                if (oldFile && oldFile.parentNode) {
+                    oldFile.remove();
+                }
+            }
+        }
+
+        function removeLogFileFromFolder() {
+            if (storedLogFiles.length > 0) {
+                const fileToRemove = storedLogFiles.shift();
+                if (fileToRemove && fileToRemove.parentNode) {
+                    fileToRemove.style.opacity = '0.3';
+                    setTimeout(() => {
+                        if (fileToRemove.parentNode) {
+                            fileToRemove.remove();
+                        }
+                    }, 500);
+                }
+                
+                // Update file count
+                const fileCount = document.getElementById('fileCount');
+                fileCount.textContent = `Files: ${storedLogFiles.length}`;
+            }
+        }
+
+        function getServerPosition(server) {
+            const servers = document.querySelectorAll('.server');
+            const folder = document.querySelector('.backup-folder');
+            let targetElement;
+            
+            if (server === 'primary') {
+                targetElement = servers[0]; // First server is primary
+            } else if (server === 'folder') {
+                targetElement = folder; // Backup folder
+            } else if (server === 'mumbai') {
+                targetElement = servers[1]; // Second server is Mumbai
+            } else if (server === 'delhi') {
+                targetElement = servers[2]; // Third server is Delhi
+            }
+            
+            if (targetElement) {
+                const rect = targetElement.getBoundingClientRect();
+                const diagramRect = document.querySelector('.server-diagram').getBoundingClientRect();
+                
+                return {
+                    x: rect.left - diagramRect.left + (rect.width / 2),
+                    y: rect.top - diagramRect.top + (rect.height / 2)
+                };
+            }
+            return { x: 0, y: 0 };
+        }
+
+        function updateDataLines() {
+            const primaryPos = getServerPosition('primary');
+            const folderPos = getServerPosition('folder');
+            const mumbaiPos = getServerPosition('mumbai');
+            const delhiPos = getServerPosition('delhi');
+            
+            const line1 = document.getElementById('line1'); // Primary to Folder
+            const line2 = document.getElementById('line2'); // Folder to Mumbai
+            const line3 = document.getElementById('line3'); // Folder to Delhi
+            
+            // Line from Primary to Folder
+            const dx1 = folderPos.x - primaryPos.x;
+            const dy1 = folderPos.y - primaryPos.y;
+            const length1 = Math.sqrt(dx1 * dx1 + dy1 * dy1);
+            const angle1 = Math.atan2(dy1, dx1) * (180 / Math.PI);
+            
+            line1.style.left = primaryPos.x + 'px';
+            line1.style.top = primaryPos.y + 'px';
+            line1.style.width = length1 + 'px';
+            line1.style.transform = `rotate(${angle1}deg)`;
+            line1.style.transformOrigin = 'left center';
+            
+            // Line from Folder to Mumbai
+            const dx2 = mumbaiPos.x - folderPos.x;
+            const dy2 = mumbaiPos.y - folderPos.y;
+            const length2 = Math.sqrt(dx2 * dx2 + dy2 * dy2);
+            const angle2 = Math.atan2(dy2, dx2) * (180 / Math.PI);
+            
+            line2.style.left = folderPos.x + 'px';
+            line2.style.top = folderPos.y + 'px';
+            line2.style.width = length2 + 'px';
+            line2.style.transform = `rotate(${angle2}deg)`;
+            line2.style.transformOrigin = 'left center';
+            
+            // Line from Folder to Delhi
+            const dx3 = delhiPos.x - folderPos.x;
+            const dy3 = delhiPos.y - folderPos.y;
+            const length3 = Math.sqrt(dx3 * dx3 + dy3 * dy3);
+            const angle3 = Math.atan2(dy3, dx3) * (180 / Math.PI);
+            
+            line3.style.left = folderPos.x + 'px';
+            line3.style.top = folderPos.y + 'px';
+            line3.style.width = length3 + 'px';
+            line3.style.transform = `rotate(${angle3}deg)`;
+            line3.style.transformOrigin = 'left center';
+        }
+
+        function toggleAnimation() {
+            isAnimating = !isAnimating;
+            const btn = document.getElementById('playPauseBtn');
+            const statusText = document.getElementById('statusText');
+            const statusIndicator = document.getElementById('statusIndicator');
+            
+            if (isAnimating) {
+                btn.textContent = '⏸️ Pause Log Shipping';
+                statusText.textContent = 'Running';
+                statusIndicator.classList.remove('paused');
+                startAnimation();
+            } else {
+                btn.textContent = '▶️ Start Log Shipping';
+                statusText.textContent = 'Paused';
+                statusIndicator.classList.add('paused');
+                stopAnimation();
+            }
+        }
+
+        function startAnimation() {
+            let logBackupInterval = setInterval(() => {
+                if (!isAnimating) {
+                    clearInterval(logBackupInterval);
+                    return;
+                }
+                // Phase 1: Log Backup - from primary server to backup folder
+                showProcessIndicator('📁 Transaction log backup created (5 min cycle)');
+                const primaryPos = getServerPosition('primary');
+                const folderPos = getServerPosition('folder');
+                
+                createLogPacket(primaryPos.x + 70, primaryPos.y, folderPos.x - 50, folderPos.y, 'log-backup', 0);
+                
+                // Add file to folder after packet reaches
+                setTimeout(() => {
+                    addLogFileToFolder();
+                    logBackupCount++;
+                    document.getElementById('logBackups').textContent = logBackupCount;
+                }, 2000);
+                
+            }, (5 * 60 * 1000) / animationSpeed); // 5 minutes
+
+            let copyInterval = setInterval(() => {
+                if (!isAnimating) {
+                    clearInterval(copyInterval);
+                    return;
+                }
+                
+                if (storedLogFiles.length === 0) {
+                    showProcessIndicator('⚠️ No log files available to copy');
+                    return;
+                }
+                
+                // Phase 2: Copy Jobs - from backup folder to secondary servers
+                showProcessIndicator('📋 Log file copied to secondaries (5 min cycle)');
+                const folderPos = getServerPosition('folder');
+                const mumbaiPos = getServerPosition('mumbai');
+                const delhiPos = getServerPosition('delhi');
+                
+                // Copy to Mumbai
+                createLogPacket(folderPos.x + 50, folderPos.y - 30, mumbaiPos.x - 70, mumbaiPos.y, 'log-copy', 0);
+                // Copy to Delhi
+                createLogPacket(folderPos.x + 50, folderPos.y + 30, delhiPos.x - 70, delhiPos.y, 'log-copy', 200);
+                
+                // Remove file from folder (simulating file being copied)
+                setTimeout(() => {
+                    removeLogFileFromFolder();
+                    filesCopiedCount += 2;
+                    document.getElementById('filesCopied').textContent = filesCopiedCount;
+                }, 1000);
+                               
+            }, (5 * 60 * 1000) / animationSpeed); // 5 minutes
+
+            let restoreInterval = setInterval(() => {
+                if (!isAnimating) {
+                    clearInterval(restoreInterval);
+                    return;
+                }
+                // Phase 3: Restore Jobs - on secondary servers
+                showProcessIndicator('🔄 Log restored on secondaries (15 min cycle)');
+                const mumbaiPos = getServerPosition('mumbai');
+                const delhiPos = getServerPosition('delhi');
+                
+                // Restore on Mumbai - packet moves into the server
+                createLogPacket(mumbaiPos.x - 50, mumbaiPos.y, mumbaiPos.x + 20, mumbaiPos.y, 'log-restore', 0);
+                // Restore on Delhi - packet moves into the server
+                createLogPacket(delhiPos.x - 50, delhiPos.y, delhiPos.x + 20, delhiPos.y, 'log-restore', 500);
+                               
+                setTimeout(() => {
+                    restoresAppliedCount += 2;
+                    document.getElementById('restoresApplied').textContent = restoresAppliedCount;
+                    document.getElementById('lastRestore').textContent = new Date().toLocaleTimeString();
+                }, 3000);
+            }, (15 * 60 * 1000) / animationSpeed); // 15 minutes
+        }
+
+        function stopAnimation() {
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+            }
+        }
+
+        function resetAnimation() {
+            isAnimating = false;
+            const btn = document.getElementById('playPauseBtn');
+            const statusText = document.getElementById('statusText');
+            const statusIndicator = document.getElementById('statusIndicator');
+            
+            btn.textContent = '▶️ Start Log Shipping';
+            statusText.textContent = 'Stopped';
+            statusIndicator.classList.add('paused');
+            
+            // Remove all existing packets
+            const packets = document.querySelectorAll('.log-packet');
+            packets.forEach(packet => packet.remove());
+            
+            // Reset counters
+            logBackupCount = 0;
+            filesCopiedCount = 0;
+            restoresAppliedCount = 0;
+            sequenceNumber = 1000;
+            
+            document.getElementById('logBackups').textContent = '0';
+            document.getElementById('filesCopied').textContent = '0';
+            document.getElementById('restoresApplied').textContent = '0';
+            document.getElementById('lastRestore').textContent = '--:--:--';
+            
+            stopAnimation();
+        }
+
+        function updateSpeed() {
+            const slider = document.getElementById('speedSlider');
+            const speedValue = document.getElementById('speedValue');
+            animationSpeed = parseFloat(slider.value);
+            speedValue.textContent = animationSpeed.toFixed(1) + 'x';
+        }
+
+        // Simulate RTO health check
+        setInterval(() => {
+            const rtoStatus = document.getElementById('rtoStatus');
+            if (isAnimating) {
+                const now = new Date();
+                const lastRestoreTime = document.getElementById('lastRestore').textContent;
+                if (lastRestoreTime !== '--:--:--') {
+                    rtoStatus.textContent = 'Healthy';
+                    rtoStatus.style.color = '#27ae60';
+                } else {
+                    rtoStatus.textContent = 'Monitoring...';
+                    rtoStatus.style.color = '#f39c12';
+                }
+            } else {
+                rtoStatus.textContent = 'Stopped';
+                rtoStatus.style.color = '#e74c3c';
+            }
+        }, 2000);
+
+        // Add window resize listener with debounce
+        let resizeTimeout;
+        window.addEventListener('resize', function() {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+                updateDataLines();
+            }, 100);
+        });
+
+        // Initialize data lines on page load
+        document.addEventListener('DOMContentLoaded', function() {
+            // Wait for layout to settle
+            setTimeout(() => {
+                updateDataLines();
+            }, 100);
+            
+            const servers = document.querySelectorAll('.server-icon');
+            servers.forEach(server => {
+                server.addEventListener('mouseenter', function() {
+                    this.style.transform = 'scale(1.05) rotate(2deg)';
+                });
+                server.addEventListener('mouseleave', function() {
+                    this.style.transform = 'scale(1) rotate(0deg)';
+                });
+            });
+        });
+    </script>
+</body>
+</html>
