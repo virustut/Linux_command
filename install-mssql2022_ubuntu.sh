@@ -96,6 +96,19 @@ The script pauses once at:
 sudo /opt/mssql/bin/mssql-conf setup
 
 
+Please select an edition:
+  1) Evaluation
+  2) Developer
+  3) Express
+  4) Web
+  5) Standard
+  6) Enterprise
+  7) Enterprise Core
+  8) Business Intelligence
+  9) Enterprise Evaluation
+ 10) Developer Evaluation
+
+
 ➤ This lets you choose Developer Edition and enter the SA password.
 (You must complete that interactively once.)
 
