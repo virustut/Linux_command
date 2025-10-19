@@ -1,0 +1,50 @@
+#!/bin/bash
+# ==========================================================
+# Auto Disk Expansion Script for Ubuntu
+# Expands the root partition and filesystem to use full disk.
+# Works for single-disk installs like /dev/sda with / on /dev/sda2
+# ==========================================================
+
+set -e
+
+echo "🔍 Checking current disk layout..."
+lsblk
+
+# Detect main disk and root partition automatically
+DISK=$(lsblk -no pkname $(df / | tail -1 | awk '{print $1}'))
+PART=$(df / | tail -1 | awk '{print $1}' | sed 's|/dev/||')
+
+echo "📀 Detected root partition: /dev/$PART on disk /dev/$DISK"
+echo "----------------------------------------------------------"
+
+# Install growpart if not available
+if ! command -v growpart &> /dev/null; then
+    echo "📦 Installing cloud-guest-utils (for growpart)..."
+    sudo apt update -y
+    sudo apt install -y cloud-guest-utils
+fi
+
+# Expand the partition
+PART_NUM=$(echo $PART | grep -o '[0-9]*$')
+echo "🚀 Expanding partition /dev/${DISK}${PART_NUM} ..."
+sudo growpart /dev/$DISK $PART_NUM
+
+# Resize the filesystem
+echo "🧩 Resizing filesystem..."
+sudo resize2fs /dev/$PART
+
+# Show new size
+echo "✅ Disk expansion complete!"
+df -h /
+
+🧰 How to Use
+
+Save it:
+nano expand-disk.sh
+
+Make it executable:
+chmod +x expand-disk.sh
+
+Run it anytime after increasing your VM’s virtual disk:
+sudo ./expand-disk.sh
+
