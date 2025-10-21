@@ -1,0 +1,33 @@
+🧩 1️⃣ Stop and Remove Existing MariaDB/MySQL
+
+sudo systemctl stop mariadb
+sudo dnf remove -y MariaDB* mariadb* mysql*
+sudo dnf clean all
+sudo rm -rf /var/lib/mysql /etc/my.cnf /etc/my.cnf.d /etc/yum.repos.d/mariadb.repo /var/log/mariadb /var/log/mysql
+
+
+🧩 2️⃣ Add Official MariaDB Repository
+curl -LsS https://downloads.mariadb.com/MariaDB/mariadb_repo_setup \
+| sudo bash -s -- --os-type=rhel --os-version=9 --mariadb-server-version=10.11
+
+verify repo
+sudo dnf repolist | grep -i mariadb
+
+🧩 3️⃣ Install MariaDB Server
+sudo dnf install -y MariaDB-server MariaDB-client
+
+🧩 4️⃣ Initialize Database Directory
+sudo mariadb-install-db --user=mysql --basedir=/usr --datadir=/var/lib/mysql
+
+
+🧩 5️⃣ Enable and Start MariaDB Service
+sudo systemctl enable mariadb
+sudo systemctl start mariadb
+
+sudo systemctl status mariadb
+
+🧩 6️⃣ Secure MariaDB
+sudo mariadb-secure-installation
+
+🧩 7️⃣ Verify MariaDB
+mysql -u root -p -e "SELECT VERSION();"
