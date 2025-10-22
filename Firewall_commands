@@ -1,0 +1,94 @@
+✅ 1. Check Firewall on the Server
+
+On the server (20.20.20.82), allow MySQL port:
+
+sudo firewall-cmd --permanent --add-port=3306/tcp
+sudo firewall-cmd --reload
+
+To test quickly (temporarily disable firewall):
+sudo systemctl stop firewalld
+
+✅ 2. Ensure Port 3306 Is Reachable
+From the client machine (where Workbench is), test with:
+telnet 20.20.20.82 3306
+
+or (on Windows PowerShell):
+Test-NetConnection -ComputerName 20.20.20.82 -Port 3306
+
+
+🔐 FIREWALL COMMANDS FOR MySQL (PORT 3306)
+🔹 Check if firewalld is running
+sudo systemctl status firewalld
+
+🔹 Allow MySQL port (3306) permanently
+sudo firewall-cmd --permanent --add-port=3306/tcp
+sudo firewall-cmd --reload
+
+🔹 Check if port 3306 is open
+sudo firewall-cmd --list-ports
+
+You should see:
+3306/tcp
+
+🔹 Remove MySQL port rule (if needed)
+sudo firewall-cmd --permanent --remove-port=3306/tcp
+sudo firewall-cmd --reload
+
+
+✅ 2. On Linux with iptables (older systems)
+🔹 Allow port 3306
+
+sudo iptables -A INPUT -p tcp --dport 3306 -j ACCEPT
+
+🔹 Save iptables rules (persistent after reboot)
+On CentOS/RHEL:
+sudo service iptables save
+
+🔹 List current iptables rules
+sudo iptables -L -n
+
+✅ 3. On Ubuntu/Debian with ufw
+🔹 Enable UFW (if not already)
+sudo ufw enable
+
+🔹 Allow MySQL port
+sudo ufw allow 3306/tcp
+
+🔹 Check firewall status
+sudo ufw status
+
+✅ 4. On Windows Firewall
+🔹 Open MySQL Port (3306) in Windows
+
+Go to Control Panel > Windows Defender Firewall
+Click on Advanced Settings
+Select Inbound Rules > New Rule
+Choose Port
+Select TCP and enter port 3306
+Allow the connection
+Apply to Domain, Private, Public
+Name the rule (e.g., "MySQL 3306")
+
+🔹 Verify the port is open:
+Use PowerShell:
+Test-NetConnection -ComputerName <server-ip> -Port 3306
+
+✅ BONUS: Disable Firewall Temporarily (For Testing Only)
+
+⚠️ Do this only temporarily to test MySQL connectivity
+🔹 CentOS/RHEL:
+sudo systemctl stop firewalld
+
+🔹 Ubuntu/Debian:
+sudo ufw disable
+
+✅ Quick Summary of Most Common Commands
+| OS/Firewall | Allow MySQL Port                                       |
+| ----------- | ------------------------------------------------------ |
+| Firewalld   | `sudo firewall-cmd --permanent --add-port=3306/tcp`    |
+| UFW         | `sudo ufw allow 3306/tcp`                              |
+| iptables    | `sudo iptables -A INPUT -p tcp --dport 3306 -j ACCEPT` |
+| Windows     | Add inbound rule for TCP port 3306                     |
+
+
+
