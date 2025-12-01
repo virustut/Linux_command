@@ -1,0 +1,14 @@
+Steps to Extend Root (/) Partition Using LVM on Ubuntu
+
+1.  Check current LVM and free space: sudo vgs sudo lvs
+
+2.  Extend the Logical Volume to use all free space: sudo lvextend -l
+    +100%FREE /dev/ubuntu-vg/ubuntu-lv
+
+3.  Resize the filesystem (EXT4): sudo resize2fs
+    /dev/ubuntu-vg/ubuntu-lv
+
+4.  Verify the new size: df -h
+
+After these steps, your root (/) filesystem will grow to use the
+remaining free space in the volume group.
