@@ -1,0 +1,103 @@
+===============================
+GTID-Based MySQL Replication
+MySQL 8.0.44 - Master → Slave
+===============================
+
+Step 0: Prerequisites
+---------------------
+1. Both servers run MySQL 8.0.44.
+2. Root access to both servers.
+3. Network connectivity on MySQL port 3306.
+4. Unique server_id on each server.
+
+---
+
+Step 1: Configure Master (Source) Server
+----------------------------------------
+Edit /etc/mysql/mysql.conf.d/mysqld.cnf on the master:
+
+[mysqld]
+server_id = 1
+log_bin = mysql-bin
+binlog_format = ROW
+gtid_mode = ON
+enforce_gtid_consistency = ON
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+log_slave_updates = ON
+# binlog_do_db = your_database_name   # optional
+
+Restart MySQL:
+sudo systemctl restart mysql
+
+Create replication user:
+CREATE USER 'repl_user'@'%' IDENTIFIED BY 'StrongPassword';
+GRANT REPLICATION SLAVE ON *.* TO 'repl_user'@'%';
+FLUSH PRIVILEGES;
+
+Check GTID and binary log:
+SHOW MASTER STATUS;
+
+---
+
+Step 2: Configure Slave (Replica) Server
+----------------------------------------
+Edit /etc/mysql/mysql.conf.d/mysqld.cnf on the slave:
+
+[mysqld]
+server_id = 2
+gtid_mode = ON
+enforce_gtid_consistency = ON
+master_info_repository = TABLE
+relay_log_info_repository = TABLE
+read_only = ON
+
+Restart MySQL:
+sudo systemctl restart mysql
+
+---
+
+Step 3: Take a snapshot of the master
+-------------------------------------
+# Take consistent backup
+mysqldump --all-databases --single-transaction --master-data=2 \
+--routines --triggers --events -u root -p > full_backup.sql
+
+# Copy backup to slave
+scp full_backup.sql user@slave_server:/tmp/
+
+# Restore on slave
+mysql -u root -p < /tmp/full_backup.sql
+
+---
+
+Step 4: Start replication on the slave
+--------------------------------------
+Connect to MySQL on the slave:
+
+CHANGE MASTER TO
+  MASTER_HOST='master_ip_or_hostname',
+  MASTER_USER='repl_user',
+  MASTER_PASSWORD='StrongPassword',
+  MASTER_AUTO_POSITION = 1;  -- GTID-based replication
+
+START SLAVE;
+
+Check replication status:
+SHOW SLAVE STATUS\G
+
+Look for:
+- Slave_IO_Running: Yes
+- Slave_SQL_Running: Yes
+- Seconds_Behind_Master: 0
+
+---
+
+Step 5: Notes
+-------------
+1. GTID replication removes the need for MASTER_LOG_FILE / MASTER_LOG_POS.
+2. enforce_gtid_consistency=ON ensures only safe statements are replicated.
+3. log_bin must be enabled on the master.
+4. For multiple databases, carefully use binlog_do_db or replicate_do_db.
+5. Monitor replication regularly to catch any errors.
+
