@@ -1,0 +1,679 @@
+========================================
+        LINUX COMMANDS (WITH USES)
+========================================
+
+1. ls
+   List files and folders.
+
+2. ls -l
+   Long listing with permissions and details.
+
+3. ls -a
+   Show hidden files.
+
+4. ls -lt
+   Sort files by date (newest first).
+
+5. cd <directory>
+   Change directory.
+
+6. cd ..
+   Go back one directory.
+
+7. pwd
+   Show current directory path.
+
+8. mkdir <folder>
+   Create a new directory.
+
+9. rm <file>
+   Delete a file.
+
+10. rm -r <folder>
+    Delete a directory and contents.
+
+11. rm -rf <folder>
+    Force delete directory (dangerous).
+
+12. cp <src> <dest>
+    Copy file.
+
+13. cp -r <src> <dest>
+    Copy folder.
+
+14. mv <src> <dest>
+    Move or rename file/folder.
+
+15. touch <file>
+    Create empty file or update timestamp.
+
+16. cat <file>
+    Display file contents.
+
+17. tac <file>
+    Display file bottom-up.
+
+18. less <file>
+    View file page by page.
+
+19. head <file>
+    Show first 10 lines.
+
+20. tail <file>
+    Show last 10 lines.
+
+21. tail -f <file>
+    Live monitor (e.g., log files).
+
+22. find <path> -name <pattern>
+    Search for files.
+
+23. grep <text> <file>
+    Search text in file.
+
+24. grep -r <text> <folder>
+    Recursive search.
+
+25. wc -l <file>
+    Count lines.
+
+26. chmod 755 <file>
+    Change file permissions.
+
+27. chown user:group <file>
+    Change ownership.
+
+28. df -h
+    Show disk usage.
+
+29. du -sh <folder>
+    Show folder size.
+
+30. top
+    View running processes.
+
+31. htop
+    Better process viewer (if installed).
+
+32. ps -aux
+    List all processes.
+
+33. kill <pid>
+    Kill process.
+
+34. kill -9 <pid>
+    Force kill.
+
+35. ifconfig
+    Show network configuration.
+
+36. ip a
+    Show IP addresses.
+
+37. ping <host>
+    Test network connectivity.
+
+38. wget <URL>
+    Download files via HTTP.
+
+39. curl <URL>
+    Fetch URL content.
+
+40. tar -czf archive.tar.gz folder
+    Compress folder.
+
+41. tar -xzf archive.tar.gz
+    Extract archive.
+
+42. unzip file.zip
+    Extract zip.
+
+43. ssh user@host
+    Connect to remote server.
+
+44. scp <src> <dest>
+    Secure file copy.
+
+45. nano <file>
+    Edit file.
+
+46. vi <file>
+    Edit file using vim.
+
+47. history
+    Show command history.
+
+48. sudo <command>
+    Run command with root privileges.
+
+49. systemctl start <service>
+    Start service.
+
+50. systemctl status <service>
+    Check service status.
+
+51. systemctl restart <service>
+    Restart service.
+
+52. journalctl -u <service>
+    View logs of a service.
+
+53. env
+    Show environment variables.
+
+54. export VAR=value
+    Set environment variable.
+
+55. reboot
+    Restart system.
+
+56. shutdown -h now
+    Shutdown system.
+
+========================================
+      MYSQL COMMANDS (WITH USES)
+========================================
+
+1. mysql -u user -p
+   Login to MySQL shell.
+
+2. SHOW DATABASES;
+   List databases.
+
+3. CREATE DATABASE dbname;
+   Create database.
+
+4. USE dbname;
+   Switch database.
+
+5. SHOW TABLES;
+   List tables.
+
+6. DESCRIBE table;
+   Show table structure.
+
+7. CREATE TABLE table (...);
+   Create a table.
+
+8. DROP TABLE table;
+   Delete table.
+
+9. SELECT * FROM table;
+   Get all records.
+
+10. INSERT INTO table VALUES (...);
+    Insert row.
+
+11. UPDATE table SET column=value WHERE ...;
+    Update rows.
+
+12. DELETE FROM table WHERE ...;
+    Delete rows.
+
+13. CREATE TABLE backup LIKE original;
+    Copy structure.
+
+14. INSERT INTO backup SELECT * FROM original;
+    Copy data.
+
+15. CREATE USER 'user'@'%' IDENTIFIED BY 'pass';
+    Create user.
+
+16. GRANT ALL PRIVILEGES ON db.* TO 'user'@'%';
+    Give permissions.
+
+17. FLUSH PRIVILEGES;
+    Apply permission changes.
+
+18. mysqldump -u user -p db > backup.sql
+    Export database.
+
+19. mysql -u user -p db < backup.sql
+    Import database.
+
+========================================
+  MICROSOFT SQL SERVER COMMANDS (T-SQL)
+========================================
+
+1. SELECT * FROM table;
+   Retrieve rows.
+
+2. SELECT TOP 10 * FROM table;
+   Get top rows.
+
+3. INSERT INTO table (...) VALUES (...);
+   Insert data.
+
+4. UPDATE table SET ... WHERE ...;
+   Update data.
+
+5. DELETE FROM table WHERE ...;
+   Delete rows.
+
+6. CREATE DATABASE dbname;
+   Create DB.
+
+7. CREATE TABLE table (...);
+   Create table.
+
+8. DROP TABLE table;
+   Delete table.
+
+9. BACKUP DATABASE dbname TO DISK='file.bak';
+   Backup DB.
+
+10. RESTORE DATABASE dbname FROM DISK='file.bak';
+    Restore DB.
+
+11. SELECT * INTO new_table FROM old_table;
+    Copy table structure+data (SQL Server only).
+
+========================================
+     POSTGRESQL COMMANDS (WITH USES)
+========================================
+
+1. psql -U user -d db
+   Login to PostgreSQL.
+
+2. \l
+   List databases.
+
+3. \c dbname
+   Change database.
+
+4. \dt
+   List tables.
+
+5. \d table
+   Describe table.
+
+6. SELECT * FROM table;
+   Retrieve rows.
+
+7. INSERT INTO table VALUES (...);
+   Insert.
+
+8. UPDATE table SET ... WHERE ...;
+   Update.
+
+9. DELETE FROM table WHERE ...;
+   Delete.
+
+10. CREATE TABLE table (...);
+    Create.
+
+11. DROP TABLE table;
+    Remove.
+
+12. pg_dump dbname > backup.sql
+    Backup DB.
+
+13. psql dbname < backup.sql
+    Restore DB.
+
+===========================================================
+           ADVANCED LINUX COMMANDS (DETAILED)
+===========================================================
+
+-----------------------------------------------------------
+  FILE LISTING & SORTING (ASC / DESC)
+-----------------------------------------------------------
+
+1. ls -lt
+   List files sorted by modified time (DESC → newest first).
+
+2. ls -ltr
+   List files sorted by modified time (ASC → oldest first).
+
+3. ls -lS
+   Sort files by size (DESC → largest first).
+
+4. ls -lSr
+   Sort files by size (ASC → smallest first).
+
+5. ls -X
+   Sort by file extension.
+
+6. ls --sort=none
+   Disable sorting (show raw order).
+
+7. sort filename.txt
+   Sort text file alphabetically (ASC).
+
+8. sort -r filename.txt
+   Sort text file alphabetically (DESC).
+
+9. sort -n filename.txt
+   Numerical ASC sort.
+
+10. sort -nr filename.txt
+    Numerical DESC sort.
+
+11. sort -k2 filename.txt
+    Sort by column 2 (ASC).
+
+12. sort -k2 -r filename.txt
+    Sort by column 2 (DESC).
+
+-----------------------------------------------------------
+  FILTERING & SEARCHING DATA
+-----------------------------------------------------------
+
+13. grep "text" file
+    Search for text.
+
+14. grep -i "text" file
+    Case-insensitive search.
+
+15. grep -r "text" /path
+    Recursive search inside folders.
+
+16. grep -n "text" file
+    Show line numbers.
+
+17. grep -v "pattern" file
+    Show lines NOT matching.
+
+18. grep -E "regex" file
+    Use extended regex.
+
+19. awk '{print $1}' file
+    Print first column.
+
+20. awk '$3 > 50' file
+    Filter rows where column 3 > 50.
+
+21. awk -F',' '{print $2}' file.csv
+    Specify delimiter.
+
+22. cut -d',' -f2 file.csv
+    Extract column 2.
+
+-----------------------------------------------------------
+  FILE VIEWING & LOG ANALYSIS
+-----------------------------------------------------------
+
+23. tail -f /var/log/syslog
+    Live log monitoring.
+
+24. tail -n 100 file.log
+    View last 100 lines.
+
+25. head -n 50 file
+    View first 50 lines.
+
+26. less file
+    View large files smoothly.
+
+27. cat file | more
+    View long file one page at a time.
+
+28. tac file
+    Reverse cat (bottom to top).
+
+-----------------------------------------------------------
+  DISK, STORAGE, AND FILE SYSTEM
+-----------------------------------------------------------
+
+29. df -h
+    Show disk usage in human-readable form.
+
+30. du -sh folder
+    Show folder size.
+
+31. du -h --max-depth=1
+    Show size of sub-folders.
+
+32. mount
+    Show mounted file systems.
+
+33. fdisk -l
+    Show disk partitions.
+
+34. lsblk
+    List block devices.
+
+-----------------------------------------------------------
+  PROCESS & SYSTEM MONITORING
+-----------------------------------------------------------
+
+35. top
+    Real-time process viewer.
+
+36. htop
+    Enhanced process viewer (if installed).
+
+37. ps aux
+    List all running processes.
+
+38. ps aux | grep mysql
+    Filter running processes.
+
+39. kill <PID>
+    Kill process.
+
+40. kill -9 <PID>
+    Force kill.
+
+41. systemctl status <service>
+    Check service status.
+
+42. systemctl restart <service>
+    Restart service.
+
+43. journalctl -u <service>
+    Logs for specific service.
+
+-----------------------------------------------------------
+  NETWORKING & CONNECTIONS
+-----------------------------------------------------------
+
+44. ip a
+    View IP addresses.
+
+45. ifconfig
+    View network settings.
+
+46. ping google.com
+    Test network connectivity.
+
+47. netstat -tulnp
+    List ports in use.
+
+48. ss -tulnp
+    Modern netstat alternative.
+
+49. curl http://example.com
+    Fetch URL.
+
+50. wget http://file.com
+    Download file.
+
+51. traceroute google.com
+    Trace network hops.
+
+52. nslookup domain.com
+    DNS lookup.
+
+53. dig domain.com
+    Advanced DNS lookup.
+
+-----------------------------------------------------------
+  USERS, PERMISSIONS, OWNERSHIP
+-----------------------------------------------------------
+
+54. chmod 755 file
+    Change file permissions.
+
+55. chmod -R 755 folder
+    Apply recursively.
+
+56. chown user:group file
+    Change owner/group.
+
+57. useradd username
+    Create user.
+
+58. passwd username
+    Set user password.
+
+59. groups username
+    Check user groups.
+
+-----------------------------------------------------------
+  ARCHIVES & COMPRESSION
+-----------------------------------------------------------
+
+60. tar -czvf file.tar.gz folder
+    Create tar.gz archive.
+
+61. tar -xvzf file.tar.gz
+    Extract archive.
+
+62. zip -r file.zip folder
+    Create zip.
+
+63. unzip file.zip
+    Extract zip.
+
+-----------------------------------------------------------
+  PACKAGE MANAGEMENT
+-----------------------------------------------------------
+
+(Ubuntu / Debian)
+
+64. apt update
+    Update package list.
+
+65. apt upgrade
+    Upgrade packages.
+
+66. apt install package
+    Install package.
+
+67. apt remove package
+    Remove package.
+
+(RHEL / CentOS)
+
+68. yum install package
+69. yum remove package
+
+-----------------------------------------------------------
+  CRON JOBS (SCHEDULING TASKS)
+-----------------------------------------------------------
+
+70. crontab -e
+    Edit cron jobs.
+
+71. crontab -l
+    List cron jobs.
+
+72. System cron format:
+    * * * * * command
+    MIN HOUR DAY MONTH WEEK command
+
+73. Example: Backup at 2AM daily
+    0 2 * * * /path/backup.sh
+
+-----------------------------------------------------------
+  ARCHIVE, BACKUP, & COPY COMMANDS
+-----------------------------------------------------------
+
+74. cp file1 file2
+    Copy file.
+
+75. cp -r folder1 folder2
+    Copy folder.
+
+76. rsync -av source/ dest/
+    Backup/sync while preserving structure.
+
+77. rsync -avz server:/path /local
+    Copy from remote server.
+
+-----------------------------------------------------------
+  SSH & REMOTE CONNECTIONS
+-----------------------------------------------------------
+
+78. ssh user@server
+    Remote login.
+
+79. ssh -p 2222 user@server
+    Login with custom port.
+
+80. scp file user@server:/path
+    Copy file to remote server.
+
+81. scp -r folder user@server:/path
+    Copy folder to remote.
+
+-----------------------------------------------------------
+  SYSTEM INFORMATION
+-----------------------------------------------------------
+
+82. uname -a
+    System kernel information.
+
+83. lsb_release -a
+    OS distribution info.
+
+84. free -h
+    Memory usage.
+
+85. uptime
+    System uptime and load.
+
+86. history
+    Show command history.
+
+87. which command
+    Find command location.
+
+-----------------------------------------------------------
+  ADVANCED TEXT MANIPULATION
+-----------------------------------------------------------
+
+88. sed 's/old/new/g' file
+    Replace text.
+
+89. sed -n '5,10p' file
+    Print lines 5 to 10.
+
+90. sed '/pattern/d' file
+    Delete lines matching a pattern.
+
+91. awk '{print $1, $3}' file
+    Print specific columns.
+
+92. awk '$1=="ERROR"{print $0}' file.log
+    Filter lines using column logic.
+
+93. paste file1 file2
+    Merge columns from two files.
+
+94. uniq filename
+    Remove duplicate adjacent lines.
+
+95. uniq -c filename
+    Count duplicates.
+
+-----------------------------------------------------------
+  DEEP FILE OPERATIONS
+-----------------------------------------------------------
+
+96. stat file
+    File metadata (permission, creation time, etc).
+
+97. file filename
+    Show file type.
+
+98. ln -s target linkname
+    Create symbolic link.
+
+99. xargs
+    Pass output of one command to another.
+
+100. find / -type f -name "*.log"
+     Search for log files.
+
